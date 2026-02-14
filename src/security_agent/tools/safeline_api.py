@@ -1,0 +1,256 @@
+"""SafeLine WAF REST API wrapper — tools for the AI assistant."""
+
+from __future__ import annotations
+
+import json
+import urllib3
+
+import requests
+
+from security_agent.config import config
+
+# Suppress InsecureRequestWarning for self-signed certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class SafeLineAPI:
+    """Wrapper for SafeLine WAF REST API."""
+
+    def __init__(self):
+        self.base_url = config.safeline.url.rstrip("/")
+        self.headers = config.safeline.headers
+        self.timeout = 10
+
+    def _get(self, path: str, params: dict | None = None) -> dict:
+        """Make a GET request to SafeLine API."""
+        url = f"{self.base_url}{path}"
+        resp = requests.get(
+            url, headers=self.headers, params=params, verify=False, timeout=self.timeout
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def _post(self, path: str, data: dict | None = None) -> dict:
+        """Make a POST request to SafeLine API."""
+        url = f"{self.base_url}{path}"
+        resp = requests.post(
+            url, headers=self.headers, json=data, verify=False, timeout=self.timeout
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def _put(self, path: str, data: dict | None = None) -> dict:
+        """Make a PUT request to SafeLine API."""
+        url = f"{self.base_url}{path}"
+        resp = requests.put(
+            url, headers=self.headers, json=data, verify=False, timeout=self.timeout
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    # ─── System ───
+
+    def get_system_info(self) -> dict:
+        """Get SafeLine version and system information."""
+        return self._get("/api/open/system")
+
+    # ─── Events and Logs ───
+
+    def get_attack_events(self, page: int = 1, page_size: int = 20) -> dict:
+        """Get paginated attack events."""
+        return self._get("/api/open/events", params={"page": page, "page_size": page_size})
+
+    def get_acl_records(self, page: int = 1, page_size: int = 20) -> dict:
+        """Get ACL block records."""
+        return self._get("/api/open/records/acl", params={"page": page, "page_size": page_size})
+
+    def get_challenge_records(self, page: int = 1, page_size: int = 20) -> dict:
+        """Get bot detection challenge records."""
+        return self._get(
+            "/api/open/records/challenge", params={"page": page, "page_size": page_size}
+        )
+
+    # ─── Statistics ───
+
+    def get_qps(self) -> dict:
+        """Get real-time queries per second."""
+        return self._get("/api/stat/qps")
+
+    def get_daily_requests(self) -> dict:
+        """Get daily access statistics."""
+        return self._get("/api/dashboard/requests")
+
+    def get_daily_intercepts(self) -> dict:
+        """Get daily interception statistics."""
+        return self._get("/api/dashboard/intercepts")
+
+    def get_error_counts(self) -> dict:
+        """Get 4xx and 5xx error counts."""
+        return self._get("/api/dashboard/counts")
+
+    def get_basic_access(self) -> dict:
+        """Get same-day access breakdown."""
+        return self._get("/api/stat/basic/access")
+
+    # ─── Protection Configuration ───
+
+    def get_protection_mode(self) -> dict:
+        """Get current protection mode."""
+        return self._get("/api/open/global/mode")
+
+    def set_protection_mode(self, mode_data: dict) -> dict:
+        """Set protection mode (block/detect/off)."""
+        return self._put("/api/open/global/mode", data=mode_data)
+
+    # ─── Policy Rules ───
+
+    def get_policies(self, page: int = 1, page_size: int = 20) -> dict:
+        """Get custom policy rules."""
+        return self._get(
+            "/api/open/policy",
+            params={"page": page, "page_size": page_size, "action": -1},
+        )
+
+    def create_policy(self, policy_data: dict) -> dict:
+        """Create a new custom policy rule."""
+        return self._post("/api/open/policy", data=policy_data)
+
+    # ─── Rate Limiting ───
+
+    def get_rate_limits(self) -> dict:
+        """Get rate limiting configuration."""
+        return self._get("/api/open/global/acl")
+
+    def set_rate_limit(self, acl_data: dict) -> dict:
+        """Configure rate limiting rule."""
+        return self._post("/api/open/global/acl", data=acl_data)
+
+    # ─── IP Groups ───
+
+    def get_ip_groups(self, top: int = 20) -> dict:
+        """Get IP groups (blacklist/whitelist)."""
+        return self._get("/api/open/ipgroup", params={"top": top})
+
+    def add_ip_group(self, group_data: dict) -> dict:
+        """Add an IP group entry."""
+        return self._post("/api/open/ipgroup", data=group_data)
+
+    # ─── Sites ───
+
+    def add_site(self, site_data: dict) -> dict:
+        """Add a new protected site."""
+        return self._post("/api/open/site", data=site_data)
+
+    # ─── Enhanced Rules ───
+
+    def get_enhanced_rules(self) -> dict:
+        """Get enhanced detection rules (Skynet)."""
+        return self._get("/api/open/skynet/rule")
+
+    def add_enhanced_rule(self, rule_data: dict) -> dict:
+        """Add an enhanced detection rule."""
+        return self._post("/api/open/skynet/rule", data=rule_data)
+
+
+# ─── LangChain Tool Functions ───
+# These are standalone functions used as LangGraph tools
+
+
+def tool_get_attack_events(page: int = 1, page_size: int = 20) -> str:
+    """Get recent attack events from SafeLine WAF.
+
+    Args:
+        page: Page number (default: 1)
+        page_size: Number of events per page (default: 20)
+
+    Returns:
+        JSON string of attack events
+    """
+    api = SafeLineAPI()
+    try:
+        result = api.get_attack_events(page=page, page_size=page_size)
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def tool_get_traffic_stats() -> str:
+    """Get real-time traffic statistics from SafeLine WAF.
+
+    Returns QPS, daily requests, daily blocks, and error counts.
+    """
+    api = SafeLineAPI()
+    stats = {}
+    try:
+        stats["qps"] = api.get_qps()
+    except Exception as e:
+        stats["qps"] = {"error": str(e)}
+    try:
+        stats["daily_requests"] = api.get_daily_requests()
+    except Exception as e:
+        stats["daily_requests"] = {"error": str(e)}
+    try:
+        stats["daily_intercepts"] = api.get_daily_intercepts()
+    except Exception as e:
+        stats["daily_intercepts"] = {"error": str(e)}
+    try:
+        stats["error_counts"] = api.get_error_counts()
+    except Exception as e:
+        stats["error_counts"] = {"error": str(e)}
+    return json.dumps(stats, indent=2)
+
+
+def tool_set_protection_mode(mode: str) -> str:
+    """Set SafeLine WAF protection mode.
+
+    Args:
+        mode: Protection mode — "block", "detect", or "off"
+
+    Returns:
+        JSON string with result
+    """
+    api = SafeLineAPI()
+    try:
+        result = api.set_protection_mode({"mode": mode})
+        return json.dumps({"status": "ok", "mode": mode, "result": result})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def tool_manage_ip_blacklist(action: str, ip: str, comment: str = "") -> str:
+    """Add or list IP blacklist entries in SafeLine WAF.
+
+    Args:
+        action: "add" to add IP, "list" to list current entries
+        ip: IP address to add (only for action="add")
+        comment: Optional comment for the entry
+
+    Returns:
+        JSON string with result
+    """
+    api = SafeLineAPI()
+    try:
+        if action == "list":
+            result = api.get_ip_groups(top=50)
+            return json.dumps(result, indent=2)
+        elif action == "add":
+            result = api.add_ip_group({
+                "ips": [ip],
+                "action": "deny",
+                "comment": comment or f"Blocked by AI assistant",
+            })
+            return json.dumps({"status": "ok", "ip": ip, "result": result})
+        else:
+            return json.dumps({"error": f"Unknown action: {action}"})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def tool_get_system_info() -> str:
+    """Get SafeLine WAF system information and version."""
+    api = SafeLineAPI()
+    try:
+        result = api.get_system_info()
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})

@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY pyproject.toml .
+RUN pip install --no-cache-dir flask python-dotenv
+
+# Copy application code
+COPY src/security_agent/petshop/ /app/security_agent/petshop/
+COPY src/security_agent/__init__.py /app/security_agent/__init__.py
+COPY src/security_agent/config.py /app/security_agent/config.py
+
+ENV PYTHONPATH=/app
+
+CMD ["python", "-m", "security_agent.petshop.app"]

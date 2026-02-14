@@ -1,0 +1,40 @@
+# Pet Shop + SafeLine WAF — Docker Compose
+#
+# Usage:
+#   docker compose up -d          # Start everything
+#   docker compose logs -f        # Watch logs
+#   docker compose down           # Stop everything
+#
+# SafeLine UI: https://localhost:9443
+# Pet Shop (direct, no WAF): http://localhost:8080
+# Pet Shop (via SafeLine): http://localhost:80  (after configuring site in SafeLine)
+
+services:
+  # ─── Pet Shop (vulnerable web app) ───
+  petshop:
+    build:
+      context: .
+      dockerfile: Dockerfile.petshop
+    ports:
+      - "8080:8080"
+    environment:
+      - PETSHOP_HOST=0.0.0.0
+      - PETSHOP_PORT=8080
+    networks:
+      - safeline-ce
+    restart: unless-stopped
+
+  # ─── SafeLine WAF ───
+  # SafeLine uses its own compose config. We reference the external network
+  # so Pet Shop is accessible to SafeLine's tengine proxy.
+  #
+  # To deploy SafeLine separately:
+  #   bash -c "$(curl -fsSLk https://waf.chaitin.com/release/latest/manager.sh)" -- --en
+  #
+  # Then connect Pet Shop to SafeLine's network:
+  #   docker network connect safeline-ce petshop
+
+networks:
+  safeline-ce:
+    external: true
+    name: safeline-ce

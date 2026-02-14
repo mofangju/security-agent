@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Search — Pet Shop{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">🔍 Search Results</h2>
+
+<form class="search-bar" action="/search" method="get">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search for pets...">
+    <button type="submit">Search</button>
+</form>
+
+{% if query %}
+{# ⚠️ VULNERABLE: query rendered without escaping via |safe — reflected XSS #}
+<p style="margin-bottom: 1rem; color: #666;">
+    Showing results for: <strong>{{ query|safe }}</strong>
+</p>
+{% endif %}
+
+{% if results %}
+<div class="product-grid">
+    {% for product in results %}
+    <div class="product-card">
+        <a href="/product/{{ product.id }}">
+            <div class="image">
+                {% if product.species == 'Dog' %}🐕
+                {% elif product.species == 'Cat' %}🐈
+                {% elif product.species == 'Rabbit' %}🐇
+                {% elif product.species == 'Bird' %}🐦
+                {% else %}🐾{% endif %}
+            </div>
+            <div class="info">
+                <div class="name">{{ product.name }}</div>
+                <div class="species">{{ product.species }} — {{ product.breed }}</div>
+                <div class="price">${{ "%.2f"|format(product.price) }}</div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% elif query %}
+<p style="color: #999;">No results found for "{{ query }}"</p>
+{% endif %}
+{% endblock %}

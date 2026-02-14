@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} — Pet Shop{% endblock %}
+{% block content %}
+<div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+    <div
+        style="flex: 1; min-width: 300px; background: #ecf0f1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 8rem; min-height: 300px;">
+        {% if product.species == 'Dog' %}🐕
+        {% elif product.species == 'Cat' %}🐈
+        {% elif product.species == 'Rabbit' %}🐇
+        {% elif product.species == 'Bird' %}🐦
+        {% else %}🐾{% endif %}
+    </div>
+    <div style="flex: 1; min-width: 300px;">
+        <h2>{{ product.name }}</h2>
+        <p style="color: #7f8c8d; margin: 0.5rem 0;">{{ product.species }} — {{ product.breed }}</p>
+        <p style="color: #27ae60; font-size: 1.5rem; font-weight: 700; margin: 1rem 0;">${{ "%.2f"|format(product.price)
+            }}</p>
+        <p style="line-height: 1.6;">{{ product.description }}</p>
+        <button class="btn btn-primary" style="margin-top: 1rem; font-size: 1rem; padding: 0.75rem 2rem;">🛒 Add to
+            Cart</button>
+    </div>
+</div>
+
+<hr style="margin: 2rem 0; border: none; border-top: 1px solid #ddd;">
+
+<h3>Customer Reviews</h3>
+<div style="margin-top: 1rem;">
+    {% for review in reviews %}
+    <div
+        style="background: white; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <strong>{{ review.author }}</strong>
+            <span style="color: #f39c12;">{{ '⭐' * review.rating }}</span>
+        </div>
+        {# ⚠️ VULNERABLE: review content rendered without escaping — stored XSS #}
+        <p>{{ review.content|safe }}</p>
+    </div>
+    {% endfor %}
+
+    {% if not reviews %}
+    <p style="color: #999;">No reviews yet. Be the first!</p>
+    {% endif %}
+</div>
+
+<div
+    style="background: white; padding: 1.5rem; border-radius: 8px; margin-top: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <h4>Write a Review</h4>
+    <form id="review-form" style="margin-top: 1rem;">
+        <input type="hidden" name="product_id" value="{{ product.id }}">
+        <div style="margin-bottom: 1rem;">
+            <input type="text" name="author" placeholder="Your name"
+                style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <textarea name="content" rows="3" placeholder="Write your review..."
+                style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit Review</button>
+    </form>
+</div>
+
+<script>
+    document.getElementById('review-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch('/review', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(() => location.reload());
+    });
+</script>
+{% endblock %}

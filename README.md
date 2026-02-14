@@ -66,13 +66,16 @@ A supervisor node routes each engineer request to the right specialist, making L
 ### Prerequisites
 - Docker & Docker Compose
 - Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (`pip install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - An LLM provider key (OpenAI, Google Gemini, or local vLLM)
 
 ### Setup
 ```bash
-# Clone and install
+# Clone and set up virtual environment
 cd security-agent
-pip install -e .
+uv venv                    # creates .venv/
+source .venv/bin/activate  # activate the venv
+uv pip install -e ".[dev]" # install all deps (including dev tools)
 cp .env.example .env
 # Edit .env with your LLM API key and SafeLine token
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the AI assistant evaluation suite.
+"""Run the Lumina AI assistant evaluation suite.
 
 Usage:
     python scripts/run_eval.py
@@ -10,7 +10,7 @@ from security_agent.eval.evaluator import Evaluator
 
 
 def main():
-    print("🧪 SafeLine AI Assistant Evaluation")
+    print("🧪 Lumina AI Assistant Evaluation")
     print("=" * 50)
     print()
 

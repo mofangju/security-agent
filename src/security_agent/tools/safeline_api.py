@@ -1,4 +1,4 @@
-"""SafeLine WAF REST API wrapper — tools for the AI assistant."""
+"""SafeLine WAF REST API wrapper — tools for Lumina assistant."""
 
 from __future__ import annotations
 
@@ -237,7 +237,7 @@ def tool_manage_ip_blacklist(action: str, ip: str, comment: str = "") -> str:
             result = api.add_ip_group({
                 "ips": [ip],
                 "action": "deny",
-                "comment": comment or f"Blocked by AI assistant",
+                "comment": comment or f"Blocked by Lumina",
             })
             return json.dumps({"status": "ok", "ip": ip, "result": result})
         else:

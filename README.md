@@ -1,6 +1,6 @@
 # Security Agent — Multi-Agent WAF Assistant PoC
 
-An end-to-end security demo with **SafeLine WAF** (real open-source WAF) and an **AI assistant chatbot** that helps engineers operate it via natural language.
+An end-to-end security demo with **SafeLine WAF** (real open-source WAF) and **Lumina**, an AI-powered security assistant that helps engineers operate their WAF through natural language.
 
 ## Architecture
 
@@ -17,8 +17,8 @@ An end-to-end security demo with **SafeLine WAF** (real open-source WAF) and an 
 └──────────┘               │ logs + API
                            ▼
                   ┌─────────────────────┐
-                  │   🤖 AI Assistant    │
-                  │   (LangGraph)       │
+                  │   🤖 Lumina          │
+                  │   (AI Assistant)    │
                   │                     │
                   │ 7 Agent Nodes:      │
                   │ • Monitor           │
@@ -36,13 +36,28 @@ An end-to-end security demo with **SafeLine WAF** (real open-source WAF) and an 
                   └─────────────────────┘
 ```
 
+## Meet Lumina 🤖
+
+**Lumina** is the AI-powered security assistant at the heart of this project. Built with LangGraph, Lumina acts as your intelligent WAF co-pilot — understanding natural language requests from engineers and translating them into SafeLine WAF operations.
+
+Lumina has **7 specialist capabilities**:
+- 📊 **Monitor** — real-time traffic stats and anomaly detection
+- 🔍 **Log Analyst** — attack event analysis and pattern recognition
+- ⚙️ **Config Manager** — WAF mode switching, IP blocking, rule management
+- 🕵️ **Threat Intel** — CVE/CWE correlation and OWASP mapping
+- 🔧 **Rule Tuner** — false positive investigation and whitelist creation
+- 📋 **Reporter** — structured incident report generation
+- 📚 **Documentation Expert** — answers "how do I..." questions via RAG
+
+A supervisor node routes each engineer request to the right specialist, making Lumina feel like a single knowledgeable assistant.
+
 ## Components
 
 | Component | Description |
 |---|---|
 | **Pet Shop** | Vulnerable Flask web app (SQLi, XSS, path traversal, command injection) |
 | **SafeLine** | Open-source WAF with semantic analysis engine, REST API, web dashboard |
-| **AI Assistant** | LangGraph chatbot — helps engineers monitor, configure, and troubleshoot SafeLine |
+| **Lumina** | LangGraph AI assistant — helps engineers monitor, configure, and troubleshoot SafeLine |
 | **Traffic Generators** | Simulate legitimate users and attackers |
 | **RAG Pipeline** | ChromaDB + hybrid search over SafeLine docs, OWASP guides, IR playbooks |
 
@@ -85,20 +100,20 @@ python -m security_agent.traffic --mode attacker
 ```
 Attacks succeed — SQLi dumps DB, XSS payloads execute. SafeLine logs attacks but is in detect-only mode.
 
-### Phase 3: Engineer Asks AI for Help (~5 min)
+### Phase 3: Engineer Asks Lumina for Help (~5 min)
 ```bash
 python -m security_agent.assistant
 ```
-Interactive chat session:
-- **"What's happening?"** → AI reads SafeLine logs, identifies 23 attacks
-- **"Enable blocking"** → AI switches SafeLine to BLOCK mode via API
-- **"Block that IP"** → AI adds attacker IP to SafeLine blacklist
+Interactive chat with Lumina:
+- **"What's happening?"** → Lumina reads SafeLine logs, identifies 23 attacks
+- **"Enable blocking"** → Lumina switches SafeLine to BLOCK mode via API
+- **"Block that IP"** → Lumina adds attacker IP to SafeLine blacklist
 
 ### Phase 4: Verify Protection (~2 min)
 ```bash
 python -m security_agent.traffic --mode attacker
 ```
-All attacks now blocked (403). AI confirms via SafeLine stats API.
+All attacks now blocked (403). Lumina confirms via SafeLine stats API.
 
 ### Phase 5: Post-Incident (~5 min)
 - **False positive tuning** → customer can't search "script writing tips"
@@ -142,7 +157,7 @@ security-agent/
 ├── src/security_agent/
 │   ├── config.py               # Settings
 │   ├── petshop/                # 🐾 Vulnerable web app
-│   ├── assistant/              # 🤖 AI assistant (LangGraph)
+│   ├── assistant/              # 🤖 Lumina AI assistant (LangGraph)
 │   │   ├── graph.py            # Supervisor graph
 │   │   ├── state.py            # Agent state
 │   │   ├── nodes/              # 7 specialist nodes

@@ -1,4 +1,4 @@
-"""LangGraph assistant state definition."""
+"""LangGraph state definition for Lumina assistant."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing_extensions import TypedDict
 
 
 class AssistantState(TypedDict):
-    """State for the AI security assistant graph.
+    """State for Lumina's LangGraph assistant graph.
 
     Attributes:
         messages: Conversation history (LangGraph message format)

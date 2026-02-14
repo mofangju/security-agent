@@ -1,4 +1,4 @@
-"""Evaluation framework for the AI security assistant."""
+"""Evaluation framework for Lumina — the AI security assistant."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class EvalResult:
 
 
 class Evaluator:
-    """Evaluate the AI security assistant's response quality."""
+    """Evaluate Lumina's response quality and routing accuracy."""
 
     def __init__(self, test_cases_path: str = "data/eval/test_cases.json"):
         self.test_cases = self._load_test_cases(test_cases_path)

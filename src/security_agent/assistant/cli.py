@@ -1,4 +1,10 @@
-"""Interactive CLI chat for the AI security assistant."""
+"""Interactive CLI chat for Lumina — the AI-powered security assistant.
+
+Lumina is the intelligent WAF co-pilot for SafeLine. It understands
+natural language and routes requests to 7 specialist capabilities:
+traffic monitoring, attack analysis, configuration, threat intel,
+rule tuning, incident reporting, and documentation Q&A.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +15,10 @@ from security_agent.assistant.graph import build_assistant_graph
 
 WELCOME_BANNER = """
 ╔══════════════════════════════════════════════════════════════╗
-║            🛡️  SafeLine AI Security Assistant  🛡️            ║
+║              🛡️  Lumina — SafeLine AI Assistant  🛡️           ║
 ╠══════════════════════════════════════════════════════════════╣
 ║                                                              ║
+║  Hi! I'm Lumina, your AI-powered WAF co-pilot.              ║
 ║  I help you manage and troubleshoot SafeLine WAF.            ║
 ║                                                              ║
 ║  I can:                                                      ║
@@ -33,12 +40,12 @@ def run_chat():
     print(WELCOME_BANNER)
 
     # Build the assistant graph
-    print("⏳ Loading AI assistant...")
+    print("⏳ Loading Lumina...")
     try:
         graph = build_assistant_graph()
-        print("✅ Assistant ready!\n")
+        print("✅ Lumina is ready!\n")
     except Exception as e:
-        print(f"❌ Failed to initialize assistant: {e}")
+        print(f"❌ Failed to initialize Lumina: {e}")
         print("   Make sure LLM_PROVIDER and API keys are set in .env")
         return
 
@@ -69,12 +76,12 @@ def run_chat():
             # Extract the assistant's response
             if result["messages"]:
                 last_msg = result["messages"][-1]
-                print(f"🤖 Assistant: {last_msg.content}")
+                print(f"🤖 Lumina: {last_msg.content}")
             else:
-                print("🤖 Assistant: I couldn't process that request. Please try again.")
+                print("🤖 Lumina: I couldn't process that request. Please try again.")
 
         except Exception as e:
-            print(f"🤖 Assistant: ❌ Error processing your request: {e}")
+            print(f"🤖 Lumina: ❌ Error processing your request: {e}")
             print("   This may be due to SafeLine API connectivity or LLM issues.")
 
         print()

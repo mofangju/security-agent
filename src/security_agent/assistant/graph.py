@@ -1,4 +1,4 @@
-"""LangGraph supervisor graph for the AI security assistant.
+"""LangGraph supervisor graph for Lumina — the AI security assistant.
 
 The supervisor routes engineer requests to specialist nodes:
 - monitor: Traffic monitoring
@@ -150,7 +150,7 @@ def config_manager_node(state: AssistantState) -> AssistantState:
     ip_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', str(state["messages"]))
     if ip_match and ("block" in content or "blacklist" in content or "ban" in content):
         ip = ip_match.group(1)
-        result = tool_manage_ip_blacklist("add", ip, "Blocked by AI assistant")
+        result = tool_manage_ip_blacklist("add", ip, "Blocked by Lumina")
         result_parts.append(f"\n\n✅ Executed: Added {ip} to blacklist\nResult: {result}")
 
     final_content = "\n".join(result_parts)
@@ -269,9 +269,9 @@ def direct_response_node(state: AssistantState) -> AssistantState:
     messages = [
         SystemMessage(
             content=(
-                "You are the AI Security Assistant for SafeLine WAF. "
+                "You are Lumina, the AI Security Assistant for SafeLine WAF. "
                 "Respond helpfully to the engineer's greeting or general question. "
-                "Mention that you can help with: monitoring traffic, analyzing attacks, "
+                "Introduce yourself as Lumina and mention that you can help with: monitoring traffic, analyzing attacks, "
                 "configuring the WAF, looking up threats, tuning rules, generating reports, "
                 "and answering questions about SafeLine."
             )

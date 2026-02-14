@@ -76,22 +76,6 @@ class SafeLineAPI:
         """Get real-time queries per second."""
         return self._get("/api/stat/qps")
 
-    def get_daily_requests(self) -> dict:
-        """Get daily access statistics."""
-        return self._get("/api/dashboard/requests")
-
-    def get_daily_intercepts(self) -> dict:
-        """Get daily interception statistics."""
-        return self._get("/api/dashboard/intercepts")
-
-    def get_error_counts(self) -> dict:
-        """Get 4xx and 5xx error counts."""
-        return self._get("/api/dashboard/counts")
-
-    def get_basic_access(self) -> dict:
-        """Get same-day access breakdown."""
-        return self._get("/api/stat/basic/access")
-
     # ─── Protection Configuration ───
 
     def get_protection_mode(self) -> dict:
@@ -115,15 +99,6 @@ class SafeLineAPI:
         """Create a new custom policy rule."""
         return self._post("/api/open/policy", data=policy_data)
 
-    # ─── Rate Limiting ───
-
-    def get_rate_limits(self) -> dict:
-        """Get rate limiting configuration."""
-        return self._get("/api/open/global/acl")
-
-    def set_rate_limit(self, acl_data: dict) -> dict:
-        """Configure rate limiting rule."""
-        return self._post("/api/open/global/acl", data=acl_data)
 
     # ─── IP Groups ───
 
@@ -177,7 +152,7 @@ def tool_get_attack_events(page: int = 1, page_size: int = 20) -> str:
 def tool_get_traffic_stats() -> str:
     """Get real-time traffic statistics from SafeLine WAF.
 
-    Returns QPS, daily requests, daily blocks, and error counts.
+    Returns QPS data and recent attack event counts.
     """
     api = SafeLineAPI()
     stats = {}
@@ -186,33 +161,50 @@ def tool_get_traffic_stats() -> str:
     except Exception as e:
         stats["qps"] = {"error": str(e)}
     try:
-        stats["daily_requests"] = api.get_daily_requests()
+        events = api.get_attack_events(page=1, page_size=1)
+        stats["total_attacks"] = events.get("data", {}).get("total", 0)
     except Exception as e:
-        stats["daily_requests"] = {"error": str(e)}
-    try:
-        stats["daily_intercepts"] = api.get_daily_intercepts()
-    except Exception as e:
-        stats["daily_intercepts"] = {"error": str(e)}
-    try:
-        stats["error_counts"] = api.get_error_counts()
-    except Exception as e:
-        stats["error_counts"] = {"error": str(e)}
+        stats["total_attacks"] = {"error": str(e)}
     return json.dumps(stats, indent=2)
 
 
 def tool_set_protection_mode(mode: str) -> str:
-    """Set SafeLine WAF protection mode.
+    """Set SafeLine WAF protection mode for all detection categories.
+
+    SafeLine v9.3.2 uses per-category semantic detection modes.
+    This tool sets ALL categories to the same mode.
 
     Args:
-        mode: Protection mode — "block", "detect", or "off"
+        mode: Protection mode — "block" (actively block attacks),
+              "default" (detect and log only), or "disable" (turn off detection)
 
     Returns:
         JSON string with result
     """
+    # Map user-friendly names to SafeLine API values
+    mode_map = {
+        "block": "block",
+        "detect": "default",
+        "default": "default",
+        "off": "disable",
+        "disable": "disable",
+    }
+    api_mode = mode_map.get(mode.lower(), mode.lower())
+
+    # All semantic detection categories in SafeLine v9.3.2
+    categories = [
+        "m_sqli", "m_xss", "m_cmd_injection", "m_file_include",
+        "m_file_upload", "m_ssrf", "m_ssti", "m_csrf",
+        "m_java", "m_java_unserialize", "m_php_code_injection",
+        "m_php_unserialize", "m_asp_code_injection", "m_http",
+        "m_scanner", "m_response", "m_rule",
+    ]
+    semantics = {cat: api_mode for cat in categories}
+
     api = SafeLineAPI()
     try:
-        result = api.set_protection_mode({"mode": mode})
-        return json.dumps({"status": "ok", "mode": mode, "result": result})
+        result = api.set_protection_mode({"semantics": semantics})
+        return json.dumps({"status": "ok", "mode": mode, "api_mode": api_mode, "result": result})
     except Exception as e:
         return json.dumps({"error": str(e)})
 

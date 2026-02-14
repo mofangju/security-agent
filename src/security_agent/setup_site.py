@@ -48,11 +48,34 @@ def setup_site() -> None:
         print(f"❌ Cannot reach SafeLine at {base_url}: {e}")
         sys.exit(1)
 
+    # Detect Pet Shop container IP (tengine needs the actual container IP)
+    import subprocess
+
+    petshop_ip = "127.0.0.1"
+    petshop_port = config.petshop.port
+    try:
+        result = subprocess.run(
+            [
+                "docker", "inspect", "-f",
+                "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+                "security-agent-petshop-1",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        ip = result.stdout.strip()
+        if ip:
+            petshop_ip = ip
+    except Exception:
+        pass
+
+    upstream = f"http://{petshop_ip}:{petshop_port}"
+
     # Register Pet Shop as a protected site
     site_payload = {
-        "ports": ["80"],
-        "server_names": ["petshop.local"],
-        "upstreams": ["http://petshop:8080"],
+        "ports": ["8888"],
+        "server_names": ["localhost", "petshop.local"],
+        "upstreams": [upstream],
         "load_balance": {
             "balance_type": 1,  # Round-robin
         },
@@ -60,9 +83,9 @@ def setup_site() -> None:
     }
 
     print(f"\n📝 Registering Pet Shop in SafeLine...")
-    print(f"   Domain: petshop.local")
-    print(f"   Upstream: http://petshop:8080")
-    print(f"   SafeLine listen port: 80")
+    print(f"   Domains: localhost, petshop.local")
+    print(f"   Upstream: {upstream}")
+    print(f"   SafeLine listen port: 8888")
 
     try:
         resp = requests.post(
@@ -70,11 +93,11 @@ def setup_site() -> None:
             headers=headers,
             json=site_payload,
             verify=False,
-            timeout=10,
+            timeout=30,
         )
         if resp.status_code == 200:
             print(f"✅ Pet Shop registered successfully!")
-            print(f"\n   Access Pet Shop via SafeLine: http://localhost:80")
+            print(f"\n   Access Pet Shop via SafeLine: http://localhost:8888")
             print(f"   Access Pet Shop directly (no WAF): http://localhost:8080")
         else:
             print(f"⚠️  Response ({resp.status_code}): {resp.text}")

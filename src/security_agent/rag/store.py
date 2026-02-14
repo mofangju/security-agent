@@ -86,5 +86,6 @@ class VectorStore:
         """Delete the collection and recreate it."""
         try:
             self.client.delete_collection(self.collection_name)
-        except ValueError:
+        except (ValueError, Exception):
+            # Collection may not exist on first run
             pass

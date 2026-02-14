@@ -69,37 +69,75 @@ A supervisor node routes each engineer request to the right specialist, making L
 - [uv](https://docs.astral.sh/uv/) (`pip install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - An LLM provider key (OpenAI, Google Gemini, or local vLLM)
 
-### Setup
+### Step 1 — Python Environment
 ```bash
-# Clone and set up virtual environment
 cd security-agent
 uv venv                    # creates .venv/
 source .venv/bin/activate  # activate the venv
 uv pip install -e ".[dev]" # install all deps (including dev tools)
 cp .env.example .env
-# Edit .env with your LLM API key and SafeLine token
+# Edit .env with your LLM API key (e.g. GOOGLE_API_KEY for Gemini)
+```
 
-# Start SafeLine + Pet Shop
+### Step 2 — Deploy SafeLine WAF
+SafeLine runs as 7 Docker containers and is installed via its official script (requires root):
+```bash
+sudo apt install -y net-tools  # required by SafeLine installer
+sudo bash -c "$(curl -fsSLk https://waf.chaitin.com/release/latest/setup.sh)"
+```
+Once installed, access the SafeLine management UI at **https://localhost:9443**.
+
+> **WSL2 Users:** SafeLine's tengine uses `host` network mode which doesn't bind ports on WSL2.
+> Run the provided fix script **after** the SafeLine install completes:
+> ```bash
+> sudo bash scripts/fix_tengine_wsl.sh
+> ```
+> This switches tengine to bridge mode and exposes port **8888** for the WAF proxy.
+
+Run the following command to reset the admin password:
+```bash
+sudo docker exec safeline-mgt resetadmin
+```
+
+Then generate an API token:
+1. Log in to SafeLine UI with username `admin` and password from `sudo docker exec safeline-mgt resetadmin`
+2. Go to **Settings -> Management → API Token**
+3. Copy the token into your `.env`:
+   ```
+   SAFELINE_API_TOKEN=your-actual-token-here
+   ```
+
+### Step 3 — Start Pet Shop
+```bash
 docker compose up -d
+```
 
-# Ingest docs into RAG knowledge base
-python -m security_agent.ingest
-
-# Register Pet Shop in SafeLine
+### Step 4 — Register Pet Shop with SafeLine
+```bash
 python -m security_agent.setup_site
+```
+
+### Step 5 — Ingest Knowledge Base
+```bash
+python -m security_agent.ingest
+```
+
+### Step 6 — Start Lumina
+```bash
+python -m security_agent.assistant
 ```
 
 ## Demo Walkthrough (5 Phases, ~16 min)
 
 ### Phase 1: Normal Traffic (~2 min)
 ```bash
-python -m security_agent.traffic --mode client
+python -m security_agent.traffic --mode client --target http://localhost:8888
 ```
 Legitimate users browse Pet Shop. SafeLine logs clean traffic.
 
 ### Phase 2: Attack Without WAF Blocking (~2 min)
 ```bash
-python -m security_agent.traffic --mode attacker
+python -m security_agent.traffic --mode attacker --target http://localhost:8888
 ```
 Attacks succeed — SQLi dumps DB, XSS payloads execute. SafeLine logs attacks but is in detect-only mode.
 

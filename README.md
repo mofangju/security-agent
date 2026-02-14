@@ -1,0 +1,163 @@
+# Security Agent — Multi-Agent WAF Assistant PoC
+
+An end-to-end security demo with **SafeLine WAF** (real open-source WAF) and an **AI assistant chatbot** that helps engineers operate it via natural language.
+
+## Architecture
+
+```
+┌──────────┐     ┌─────────────────────┐     ┌──────────┐
+│  Client   │────▶│     SafeLine WAF    │────▶│ Pet Shop │
+│  Traffic  │     │  (7 Docker containers) │     │  (Flask) │
+│  Generator│     │  - Tengine proxy    │     │ Vulnerable│
+└──────────┘     │  - AI detector      │     │  Web App  │
+┌──────────┐     │  - Management UI    │     └──────────┘
+│  Attacker │────▶│  - PostgreSQL       │
+│  Traffic  │     │  - REST API         │
+│  Generator│     └─────────┬───────────┘
+└──────────┘               │ logs + API
+                           ▼
+                  ┌─────────────────────┐
+                  │   🤖 AI Assistant    │
+                  │   (LangGraph)       │
+                  │                     │
+                  │ 7 Agent Nodes:      │
+                  │ • Monitor           │
+                  │ • Log Analyst       │
+                  │ • Config Manager    │
+                  │ • Threat Intel      │
+                  │ • Rule Tuner        │
+                  │ • Reporter          │
+                  │ • RAG Agent         │
+                  │                     │
+                  │ Tools:              │
+                  │ • SafeLine API      │
+                  │ • CVE Lookup        │
+                  │ • RAG Search        │
+                  └─────────────────────┘
+```
+
+## Components
+
+| Component | Description |
+|---|---|
+| **Pet Shop** | Vulnerable Flask web app (SQLi, XSS, path traversal, command injection) |
+| **SafeLine** | Open-source WAF with semantic analysis engine, REST API, web dashboard |
+| **AI Assistant** | LangGraph chatbot — helps engineers monitor, configure, and troubleshoot SafeLine |
+| **Traffic Generators** | Simulate legitimate users and attackers |
+| **RAG Pipeline** | ChromaDB + hybrid search over SafeLine docs, OWASP guides, IR playbooks |
+
+## Quick Start
+
+### Prerequisites
+- Docker & Docker Compose
+- Python 3.11+
+- An LLM provider key (OpenAI, Google Gemini, or local vLLM)
+
+### Setup
+```bash
+# Clone and install
+cd security-agent
+pip install -e .
+cp .env.example .env
+# Edit .env with your LLM API key and SafeLine token
+
+# Start SafeLine + Pet Shop
+docker compose up -d
+
+# Ingest docs into RAG knowledge base
+python -m security_agent.ingest
+
+# Register Pet Shop in SafeLine
+python -m security_agent.setup_site
+```
+
+## Demo Walkthrough (5 Phases, ~16 min)
+
+### Phase 1: Normal Traffic (~2 min)
+```bash
+python -m security_agent.traffic --mode client
+```
+Legitimate users browse Pet Shop. SafeLine logs clean traffic.
+
+### Phase 2: Attack Without WAF Blocking (~2 min)
+```bash
+python -m security_agent.traffic --mode attacker
+```
+Attacks succeed — SQLi dumps DB, XSS payloads execute. SafeLine logs attacks but is in detect-only mode.
+
+### Phase 3: Engineer Asks AI for Help (~5 min)
+```bash
+python -m security_agent.assistant
+```
+Interactive chat session:
+- **"What's happening?"** → AI reads SafeLine logs, identifies 23 attacks
+- **"Enable blocking"** → AI switches SafeLine to BLOCK mode via API
+- **"Block that IP"** → AI adds attacker IP to SafeLine blacklist
+
+### Phase 4: Verify Protection (~2 min)
+```bash
+python -m security_agent.traffic --mode attacker
+```
+All attacks now blocked (403). AI confirms via SafeLine stats API.
+
+### Phase 5: Post-Incident (~5 min)
+- **False positive tuning** → customer can't search "script writing tips"
+- **CVE correlation** → map attacks to OWASP categories
+- **Incident report** → structured report with timeline, impact, recommendations
+- **How-to questions** → RAG answers from SafeLine docs
+
+## SafeLine REST API Endpoints Used
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/open/events` | Read attack events |
+| `GET /api/stat/qps` | Real-time traffic stats |
+| `GET /api/dashboard/intercepts` | Block statistics |
+| `GET/PUT /api/open/global/mode` | Protection mode (block/detect/off) |
+| `GET/POST /api/open/policy` | Custom WAF rules |
+| `GET/POST /api/open/ipgroup` | IP blacklist/whitelist |
+| `GET /api/open/records/acl` | Blocked request details |
+| `POST /api/open/site` | Register protected sites |
+| `GET/POST /api/open/global/acl` | Rate limiting rules |
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| WAF | SafeLine (Docker, semantic analysis) |
+| Web App | Flask + SQLite |
+| AI Framework | LangGraph |
+| LLM Providers | vLLM, OpenAI, Google Gemini |
+| Vector DB | ChromaDB |
+| Search | Hybrid (semantic + BM25 + RRF) |
+| Evaluation | RAGAS |
+
+## Project Structure
+
+```
+security-agent/
+├── docker-compose.yml          # SafeLine + Pet Shop
+├── pyproject.toml
+├── .env.example
+├── src/security_agent/
+│   ├── config.py               # Settings
+│   ├── petshop/                # 🐾 Vulnerable web app
+│   ├── assistant/              # 🤖 AI assistant (LangGraph)
+│   │   ├── graph.py            # Supervisor graph
+│   │   ├── state.py            # Agent state
+│   │   ├── nodes/              # 7 specialist nodes
+│   │   └── cli.py              # Interactive chat
+│   ├── tools/                  # 🔧 SafeLine API, CVE, RAG
+│   ├── rag/                    # 📚 ChromaDB pipeline
+│   ├── llm/                    # 🧠 Multi-provider LLM
+│   ├── traffic/                # 🚦 Client + attacker generators
+│   ├── eval/                   # 📊 Evaluation framework
+│   └── finetune/               # 🎯 Fine-tuning scaffolding
+├── data/docs/                  # RAG knowledge base
+├── tests/
+└── scripts/
+```
+
+## License
+
+MIT

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "security-agent"
+version = "0.1.0"
+description = "Multi-Agent Security WAF Assistant PoC with SafeLine + LangGraph"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    # LangGraph + LangChain
+    "langgraph>=0.2.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-community>=0.3.0",
+
+    # RAG
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "rank-bm25>=0.2.2",
+
+    # Web Apps
+    "flask>=3.0.0",
+    "requests>=2.31.0",
+
+    # Evaluation
+    "ragas>=0.2.0",
+
+    # Fine-tuning scaffolding
+    "peft>=0.12.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "click>=8.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,72 @@
+[
+    {
+        "id": "tc-01",
+        "query": "How is my traffic looking?",
+        "expected_route": "monitor",
+        "expected_keywords": ["QPS", "requests", "traffic"],
+        "category": "monitoring"
+    },
+    {
+        "id": "tc-02",
+        "query": "Show me recent attack logs",
+        "expected_route": "log_analyst",
+        "expected_keywords": ["attack", "events", "detected"],
+        "category": "log_analysis"
+    },
+    {
+        "id": "tc-03",
+        "query": "Switch WAF to blocking mode",
+        "expected_route": "config_manager",
+        "expected_keywords": ["block", "mode", "protection"],
+        "category": "configuration"
+    },
+    {
+        "id": "tc-04",
+        "query": "What CVEs are related to these SQL injection attacks?",
+        "expected_route": "threat_intel",
+        "expected_keywords": ["CWE-89", "SQL", "injection", "OWASP"],
+        "category": "threat_intel"
+    },
+    {
+        "id": "tc-05",
+        "query": "A customer can't search for 'script writing tips' — it's being blocked",
+        "expected_route": "tuner",
+        "expected_keywords": ["false positive", "whitelist", "XSS"],
+        "category": "tuning"
+    },
+    {
+        "id": "tc-06",
+        "query": "Generate an incident report for the recent attacks",
+        "expected_route": "reporter",
+        "expected_keywords": ["report", "incident", "timeline"],
+        "category": "reporting"
+    },
+    {
+        "id": "tc-07",
+        "query": "How do I set up rate limiting for the login page?",
+        "expected_route": "rag_agent",
+        "expected_keywords": ["rate limit", "login", "threshold"],
+        "category": "documentation"
+    },
+    {
+        "id": "tc-08",
+        "query": "Hello, I'm the Pet Shop engineer",
+        "expected_route": "direct",
+        "expected_keywords": ["help", "assist", "SafeLine"],
+        "category": "general"
+    },
+    {
+        "id": "tc-09",
+        "query": "Block the IP address 192.168.1.50",
+        "expected_route": "config_manager",
+        "expected_keywords": ["192.168.1.50", "blacklist", "blocked"],
+        "category": "configuration"
+    },
+    {
+        "id": "tc-10",
+        "query": "What is the current protection mode?",
+        "expected_route": "monitor",
+        "expected_keywords": ["mode", "protection"],
+        "category": "monitoring"
+    }
+]

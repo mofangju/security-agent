@@ -43,87 +43,15 @@ class Evaluator:
         """Load test cases from JSON file."""
         filepath = Path(path)
         if not filepath.exists():
-            return self._default_test_cases()
+            raise FileNotFoundError(
+                f"Test cases file not found: {filepath}. "
+                "Please ensure data/eval/test_cases.json exists."
+            )
 
         with open(filepath) as f:
             data = json.load(f)
 
         return [TestCase(**tc) for tc in data]
-
-    def _default_test_cases(self) -> list[TestCase]:
-        """Default test cases if no file is provided."""
-        return [
-            TestCase(
-                id="tc-01",
-                query="How is my traffic looking?",
-                expected_route="monitor",
-                expected_keywords=["QPS", "requests", "traffic"],
-                category="monitoring",
-            ),
-            TestCase(
-                id="tc-02",
-                query="Show me recent attack logs",
-                expected_route="log_analyst",
-                expected_keywords=["attack", "events", "detected"],
-                category="log_analysis",
-            ),
-            TestCase(
-                id="tc-03",
-                query="Switch WAF to blocking mode",
-                expected_route="config_manager",
-                expected_keywords=["block", "mode", "protection"],
-                category="configuration",
-            ),
-            TestCase(
-                id="tc-04",
-                query="What CVEs are related to these SQL injection attacks?",
-                expected_route="threat_intel",
-                expected_keywords=["CWE-89", "SQL", "injection", "OWASP"],
-                category="threat_intel",
-            ),
-            TestCase(
-                id="tc-05",
-                query="A customer can't search for 'script writing tips' — it's being blocked",
-                expected_route="tuner",
-                expected_keywords=["false positive", "whitelist", "XSS"],
-                category="tuning",
-            ),
-            TestCase(
-                id="tc-06",
-                query="Generate an incident report for the recent attacks",
-                expected_route="reporter",
-                expected_keywords=["report", "incident", "timeline"],
-                category="reporting",
-            ),
-            TestCase(
-                id="tc-07",
-                query="How do I set up rate limiting for the login page?",
-                expected_route="rag_agent",
-                expected_keywords=["rate limit", "login", "threshold"],
-                category="documentation",
-            ),
-            TestCase(
-                id="tc-08",
-                query="Hello, I'm the Pet Shop engineer",
-                expected_route="direct",
-                expected_keywords=["help", "assist", "SafeLine"],
-                category="general",
-            ),
-            TestCase(
-                id="tc-09",
-                query="Block the IP address 192.168.1.50",
-                expected_route="config_manager",
-                expected_keywords=["192.168.1.50", "blacklist", "blocked"],
-                category="configuration",
-            ),
-            TestCase(
-                id="tc-10",
-                query="What is the current protection mode?",
-                expected_route="monitor",
-                expected_keywords=["mode", "protection"],
-                category="monitoring",
-            ),
-        ]
 
     def evaluate_routing(self, test_case: TestCase, actual_route: str) -> bool:
         """Check if the supervisor routed to the correct specialist."""

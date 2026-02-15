@@ -148,6 +148,7 @@ python -m security_agent.assistant
 Interactive chat with Lumina:
 - **"What's happening?"** → Lumina reads SafeLine logs, identifies 23 attacks
 - **"Enable blocking"** → Lumina switches SafeLine to BLOCK mode via API
+- **"Show me the attack logs"** → Lumina reads SafeLine logs, identifies 23 attacks
 - **"Block that IP"** → Lumina adds attacker IP to SafeLine blacklist
 
 ### Phase 4: Verify Protection (~2 min)

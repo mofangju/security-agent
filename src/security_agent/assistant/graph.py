@@ -12,6 +12,8 @@ The supervisor routes engineer requests to specialist nodes:
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from typing import Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -76,34 +78,95 @@ def supervisor_node(state: AssistantState) -> AssistantState:
     return {**state, "next_node": "direct"}
 
 
+def _format_qps_summary(raw_stats: str) -> str:
+    """Pre-format QPS data into a concise summary."""
+    try:
+        data = json.loads(raw_stats)
+        qps_nodes = data.get("qps", {}).get("data", {}).get("nodes", [])
+        total_attacks = data.get("total_attacks", 0)
+
+        # Extract non-zero QPS entries
+        active = [(n.get("time", "?"), list(n.values())[0]) for n in qps_nodes
+                   if any(v != 0 for k, v in n.items() if k != "time")]
+        latest_qps = list(qps_nodes[-1].values())[0] if qps_nodes else 0
+
+        lines = [f"Current QPS: {latest_qps}"]
+        lines.append(f"Total attacks detected (cumulative): {total_attacks}")
+        if active:
+            lines.append(f"Active QPS in window: {', '.join(f'{t}={q}' for t, q in active[-10:])}")
+        else:
+            lines.append("No active traffic in this window — system is idle.")
+        return "\n".join(lines)
+    except Exception:
+        return raw_stats
+
+
 def monitor_node(state: AssistantState) -> AssistantState:
     """Traffic monitoring specialist."""
     llm = get_llm(temperature=0.0)
 
-    # Get live stats
-    stats = tool_get_traffic_stats()
+    # Get live stats and pre-format
+    raw_stats = tool_get_traffic_stats()
+    summary = _format_qps_summary(raw_stats)
 
     messages = [
         SystemMessage(content=MONITOR_SYSTEM),
         *state["messages"],
-        HumanMessage(content=f"Here are the current SafeLine traffic statistics:\n\n{stats}\n\nAnalyze and present these to the engineer."),
+        HumanMessage(content=f"Current SafeLine traffic summary:\n\n{summary}\n\nPresent this concisely to the engineer."),
     ]
 
     response = llm.invoke(messages)
     return {**state, "messages": [AIMessage(content=response.content)]}
 
 
+def _format_events_summary(raw_events: str) -> str:
+    """Pre-format attack events into a concise text summary."""
+    try:
+        data = json.loads(raw_events)
+        nodes = data.get("data", {}).get("nodes", [])
+        total = data.get("data", {}).get("total", 0)
+
+        if not nodes:
+            return f"Total events: {total}\nNo events in this page."
+
+        lines = [f"Total events: {total}", ""]
+        for e in nodes:
+            ts = e.get("start_at", 0)
+            if ts and ts > 0:
+                time_str = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            else:
+                time_str = "unknown"
+            status = "BLOCKED" if e.get("deny_count", 0) > 0 and e.get("pass_count", 0) == 0 else "PARTIAL"
+            if e.get("deny_count", 0) == 0:
+                status = "PASSED"
+            lines.append(
+                f"Event #{e['id']}: IP={e.get('ip','?')} → {e.get('host','?')}:{e.get('dst_port','?')} "
+                f"| blocked={e.get('deny_count',0)} passed={e.get('pass_count',0)} "
+                f"| status={status} | time={time_str} "
+                f"| country={e.get('country','')} | finished={e.get('finished', True)}"
+            )
+        return "\n".join(lines)
+    except Exception:
+        return raw_events
+
+
 def log_analyst_node(state: AssistantState) -> AssistantState:
     """Attack log analysis specialist."""
     llm = get_llm(temperature=0.0)
 
-    # Get recent attack events
-    events = tool_get_attack_events(page=1, page_size=50)
+    # Get recent attack events and pre-format
+    raw_events = tool_get_attack_events(page=1, page_size=50)
+    summary = _format_events_summary(raw_events)
 
     messages = [
         SystemMessage(content=LOG_ANALYST_SYSTEM),
         *state["messages"],
-        HumanMessage(content=f"Here are the recent SafeLine attack events:\n\n{events}\n\nAnalyze these events and present findings to the engineer."),
+        HumanMessage(
+            content=(
+                f"Recent SafeLine attack events:\n\n{summary}\n\n"
+                "Analyze these events concisely. Use short bullet points, not wide tables."
+            )
+        ),
     ]
 
     response = llm.invoke(messages)

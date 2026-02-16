@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check \
+            src/security_agent/assistant/actions.py \
+            src/security_agent/assistant/cli.py \
+            src/security_agent/assistant/graph.py \
+            src/security_agent/config.py \
+            src/security_agent/eval/evaluator.py \
+            src/security_agent/setup_site.py \
+            src/security_agent/tools/parsers.py \
+            src/security_agent/tools/safeline_api.py \
+            scripts/run_eval.py \
+            tests
+
+      - name: Test
+        run: PYTHONPATH=src pytest -q

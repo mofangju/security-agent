@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-import urllib3
 
 import requests
+import urllib3
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from security_agent.config import config
-
-# Suppress InsecureRequestWarning for self-signed certs
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class SafeLineAPI:
@@ -19,13 +18,44 @@ class SafeLineAPI:
     def __init__(self):
         self.base_url = config.safeline.url.rstrip("/")
         self.headers = config.safeline.headers
-        self.timeout = 10
+        self.timeout = config.safeline.timeout
+        self.retries = config.safeline.retries
+        self.verify_tls = config.safeline.verify_tls
+        self.ca_bundle = config.safeline.ca_bundle.strip()
+
+        self.session = requests.Session()
+        retry = Retry(
+            total=self.retries,
+            connect=self.retries,
+            read=self.retries,
+            backoff_factor=0.3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=frozenset(["GET", "POST", "PUT"]),
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+        # For local demo setups using self-signed certs.
+        if not self.verify_tls:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    @property
+    def verify(self) -> bool | str:
+        """Return requests-compatible TLS verify value."""
+        if self.verify_tls and self.ca_bundle:
+            return self.ca_bundle
+        return self.verify_tls
 
     def _get(self, path: str, params: dict | None = None) -> dict:
         """Make a GET request to SafeLine API."""
         url = f"{self.base_url}{path}"
-        resp = requests.get(
-            url, headers=self.headers, params=params, verify=False, timeout=self.timeout
+        resp = self.session.get(
+            url,
+            headers=self.headers,
+            params=params,
+            verify=self.verify,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         return resp.json()
@@ -33,8 +63,12 @@ class SafeLineAPI:
     def _post(self, path: str, data: dict | None = None) -> dict:
         """Make a POST request to SafeLine API."""
         url = f"{self.base_url}{path}"
-        resp = requests.post(
-            url, headers=self.headers, json=data, verify=False, timeout=self.timeout
+        resp = self.session.post(
+            url,
+            headers=self.headers,
+            json=data,
+            verify=self.verify,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         return resp.json()
@@ -42,8 +76,12 @@ class SafeLineAPI:
     def _put(self, path: str, data: dict | None = None) -> dict:
         """Make a PUT request to SafeLine API."""
         url = f"{self.base_url}{path}"
-        resp = requests.put(
-            url, headers=self.headers, json=data, verify=False, timeout=self.timeout
+        resp = self.session.put(
+            url,
+            headers=self.headers,
+            json=data,
+            verify=self.verify,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         return resp.json()
@@ -229,7 +267,7 @@ def tool_manage_ip_blacklist(action: str, ip: str, comment: str = "") -> str:
             result = api.add_ip_group({
                 "ips": [ip],
                 "action": "deny",
-                "comment": comment or f"Blocked by Lumina",
+                "comment": comment or "Blocked by Lumina",
             })
             return json.dumps({"status": "ok", "ip": ip, "result": result})
         else:

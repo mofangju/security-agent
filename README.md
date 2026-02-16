@@ -279,6 +279,31 @@ python scripts/run_eval.py
 
 Test cases live in `data/eval/test_cases.json`.
 
+Run deterministic offline evaluation (no live model/API calls):
+
+```bash
+python scripts/run_eval.py --deterministic
+```
+
+## Local Verification
+
+Before committing changes, run:
+
+```bash
+ruff check \
+  src/security_agent/assistant/actions.py \
+  src/security_agent/assistant/cli.py \
+  src/security_agent/assistant/graph.py \
+  src/security_agent/config.py \
+  src/security_agent/eval/evaluator.py \
+  src/security_agent/setup_site.py \
+  src/security_agent/tools/parsers.py \
+  src/security_agent/tools/safeline_api.py \
+  scripts/run_eval.py \
+  tests
+PYTHONPATH=src pytest -q
+```
+
 ---
 
 ## License

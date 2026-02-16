@@ -12,13 +12,15 @@ The supervisor routes engineer requests to specialist nodes:
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
-from typing import Literal
-
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
+from security_agent.assistant.actions import (
+    action_from_pending,
+    action_preview,
+    infer_config_action,
+    is_confirmation_message,
+)
 from security_agent.assistant.state import AssistantState
 from security_agent.llm.prompts import (
     CONFIG_MANAGER_SYSTEM,
@@ -32,15 +34,15 @@ from security_agent.llm.prompts import (
 )
 from security_agent.llm.provider import get_llm
 from security_agent.tools.cve_lookup import tool_cve_lookup
+from security_agent.tools.parsers import parse_events, parse_qps
 from security_agent.tools.rag_search import tool_rag_search
 from security_agent.tools.safeline_api import (
     tool_get_attack_events,
+    tool_get_system_info,
     tool_get_traffic_stats,
     tool_manage_ip_blacklist,
     tool_set_protection_mode,
-    tool_get_system_info,
 )
-
 
 SPECIALIST_NODES = [
     "monitor", "log_analyst", "config_manager",
@@ -81,19 +83,17 @@ def supervisor_node(state: AssistantState) -> AssistantState:
 def _format_qps_summary(raw_stats: str) -> str:
     """Pre-format QPS data into a concise summary."""
     try:
-        data = json.loads(raw_stats)
-        qps_nodes = data.get("qps", {}).get("data", {}).get("nodes", [])
-        total_attacks = data.get("total_attacks", 0)
+        parsed = parse_qps(raw_stats)
+        latest_qps = parsed["current_qps"]
+        total_attacks = parsed["total_attacks"]
+        active = parsed["active_qps"]
 
-        # Extract non-zero QPS entries
-        active = [(n.get("time", "?"), list(n.values())[0]) for n in qps_nodes
-                   if any(v != 0 for k, v in n.items() if k != "time")]
-        latest_qps = list(qps_nodes[-1].values())[0] if qps_nodes else 0
-
-        lines = [f"Current QPS: {latest_qps}"]
+        lines = [f"Current QPS: {latest_qps:g}"]
         lines.append(f"Total attacks detected (cumulative): {total_attacks}")
         if active:
-            lines.append(f"Active QPS in window: {', '.join(f'{t}={q}' for t, q in active[-10:])}")
+            lines.append(
+                "Active QPS in window: " + ", ".join(f"{t}={q:g}" for t, q in active[-10:])
+            )
         else:
             lines.append("No active traffic in this window — system is idle.")
         return "\n".join(lines)
@@ -112,7 +112,13 @@ def monitor_node(state: AssistantState) -> AssistantState:
     messages = [
         SystemMessage(content=MONITOR_SYSTEM),
         *state["messages"],
-        HumanMessage(content=f"Current SafeLine traffic summary:\n\n{summary}\n\nPresent this concisely to the engineer."),
+        HumanMessage(
+            content=(
+                "Current SafeLine traffic summary:\n\n"
+                f"{summary}\n\n"
+                "Present this concisely to the engineer."
+            )
+        ),
     ]
 
     response = llm.invoke(messages)
@@ -122,27 +128,20 @@ def monitor_node(state: AssistantState) -> AssistantState:
 def _format_events_summary(raw_events: str) -> str:
     """Pre-format attack events into a concise text summary."""
     try:
-        data = json.loads(raw_events)
-        nodes = data.get("data", {}).get("nodes", [])
-        total = data.get("data", {}).get("total", 0)
+        parsed = parse_events(raw_events)
+        events = parsed["events"]
+        total = parsed["total"]
 
-        if not nodes:
+        if not events:
             return f"Total events: {total}\nNo events in this page."
 
         lines = [f"Total events: {total}", ""]
-        for e in nodes:
-            ts = e.get("start_at", 0)
-            if ts and ts > 0:
-                time_str = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-            else:
-                time_str = "unknown"
-            status = "BLOCKED" if e.get("deny_count", 0) > 0 and e.get("pass_count", 0) == 0 else "PARTIAL"
-            if e.get("deny_count", 0) == 0:
-                status = "PASSED"
+        for e in events:
+            event_target = f"{e.get('host', '?')}:{e.get('dst_port', '?')}"
             lines.append(
-                f"Event #{e['id']}: IP={e.get('ip','?')} → {e.get('host','?')}:{e.get('dst_port','?')} "
+                f"Event #{e['id']}: IP={e.get('ip','?')} → {event_target} "
                 f"| blocked={e.get('deny_count',0)} passed={e.get('pass_count',0)} "
-                f"| status={status} | time={time_str} "
+                f"| status={e.get('status','unknown')} | time={e.get('time','unknown')} "
                 f"| country={e.get('country','')} | finished={e.get('finished', True)}"
             )
         return "\n".join(lines)
@@ -175,49 +174,83 @@ def log_analyst_node(state: AssistantState) -> AssistantState:
 
 def config_manager_node(state: AssistantState) -> AssistantState:
     """WAF configuration specialist."""
+    context = dict(state.get("context", {}))
+    last_user_message = ""
+    if state.get("messages"):
+        last_user_message = str(state["messages"][-1].content)
+
+    intent = infer_config_action(last_user_message)
+    pending_intent = action_from_pending(context.get("pending_action"))
+
+    if pending_intent.action != "none" and is_confirmation_message(last_user_message):
+        intent = pending_intent
+        context["confirmed"] = True
+
+    if pending_intent.action != "none" and "cancel" in last_user_message.lower():
+        context.pop("pending_action", None)
+        context["confirmed"] = False
+        return {
+            **state,
+            "context": context,
+            "messages": [AIMessage(content="Cancelled pending configuration action.")],
+        }
+
+    if intent.action != "none":
+        if not bool(context.get("confirmed", False)):
+            context["pending_action"] = {
+                "action": intent.action,
+                "mode": intent.mode,
+                "ip": intent.ip,
+                "comment": intent.comment,
+            }
+            context["confirmed"] = False
+            return {
+                **state,
+                "context": context,
+                "messages": [
+                    AIMessage(
+                        content=(
+                            f"Please confirm before I apply this change: {action_preview(intent)}. "
+                            "Reply with 'confirm' to proceed or 'cancel' to abort."
+                        )
+                    )
+                ],
+            }
+
+        if intent.action == "set_mode":
+            result = tool_set_protection_mode(intent.mode or "detect")
+            content = (
+                f"✅ Executed: Set protection mode to {str(intent.mode or 'detect').upper()}\n"
+                f"Result: {result}"
+            )
+        elif intent.action == "blacklist_ip":
+            result = tool_manage_ip_blacklist(
+                "add",
+                intent.ip or "",
+                intent.comment or "Blocked by Lumina",
+            )
+            content = f"✅ Executed: Added {intent.ip} to blacklist\nResult: {result}"
+        else:
+            content = "No supported configuration action detected."
+
+        context.pop("pending_action", None)
+        context["confirmed"] = False
+        return {**state, "context": context, "messages": [AIMessage(content=content)]}
+
     llm = get_llm(temperature=0.0)
-
-    # Get current mode and system info
     system_info = tool_get_system_info()
-
     messages = [
         SystemMessage(content=CONFIG_MANAGER_SYSTEM),
         *state["messages"],
         HumanMessage(
             content=(
                 f"Current SafeLine system info:\n{system_info}\n\n"
-                "Determine what configuration action the engineer wants and execute it. "
-                "Available actions:\n"
-                "- Set protection mode: tool_set_protection_mode(mode='block'/'detect'/'off')\n"
-                "- Manage IP blacklist: tool_manage_ip_blacklist(action, ip, comment)\n"
-                "Respond with the action you're taking and the result."
+                "Answer the engineer's configuration question concisely."
             )
         ),
     ]
-
     response = llm.invoke(messages)
-    content = response.content.lower()
-
-    # Auto-execute common config actions based on LLM response
-    result_parts = [response.content]
-
-    if "block" in content and "mode" in content:
-        result = tool_set_protection_mode("block")
-        result_parts.append(f"\n\n✅ Executed: Set protection mode to BLOCK\nResult: {result}")
-    elif "detect" in content and "mode" in content:
-        result = tool_set_protection_mode("detect")
-        result_parts.append(f"\n\n✅ Executed: Set protection mode to DETECT\nResult: {result}")
-
-    # Check for IP blacklist requests
-    import re
-    ip_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', str(state["messages"]))
-    if ip_match and ("block" in content or "blacklist" in content or "ban" in content):
-        ip = ip_match.group(1)
-        result = tool_manage_ip_blacklist("add", ip, "Blocked by Lumina")
-        result_parts.append(f"\n\n✅ Executed: Added {ip} to blacklist\nResult: {result}")
-
-    final_content = "\n".join(result_parts)
-    return {**state, "messages": [AIMessage(content=final_content)]}
+    return {**state, "context": context, "messages": [AIMessage(content=response.content)]}
 
 
 def threat_intel_node(state: AssistantState) -> AssistantState:
@@ -334,7 +367,8 @@ def direct_response_node(state: AssistantState) -> AssistantState:
             content=(
                 "You are Lumina, the AI Security Assistant for SafeLine WAF. "
                 "Respond helpfully to the engineer's greeting or general question. "
-                "Introduce yourself as Lumina and mention that you can help with: monitoring traffic, analyzing attacks, "
+                "Introduce yourself as Lumina and mention that you can help with: "
+                "monitoring traffic, analyzing attacks, "
                 "configuring the WAF, looking up threats, tuning rules, generating reports, "
                 "and answering questions about SafeLine."
             )

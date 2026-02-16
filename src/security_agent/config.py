@@ -16,6 +16,13 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(_PROJECT_ROOT / ".env")
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class LLMConfig:
     """LLM provider configuration."""
@@ -47,6 +54,10 @@ class SafeLineConfig:
 
     url: str = field(default_factory=lambda: os.getenv("SAFELINE_URL", "https://localhost:9443"))
     api_token: str = field(default_factory=lambda: os.getenv("SAFELINE_API_TOKEN", ""))
+    verify_tls: bool = field(default_factory=lambda: _env_bool("SAFELINE_VERIFY_TLS", True))
+    ca_bundle: str = field(default_factory=lambda: os.getenv("SAFELINE_CA_BUNDLE", ""))
+    timeout: int = field(default_factory=lambda: int(os.getenv("SAFELINE_TIMEOUT", "10")))
+    retries: int = field(default_factory=lambda: int(os.getenv("SAFELINE_RETRIES", "2")))
 
     @property
     def headers(self) -> dict[str, str]:

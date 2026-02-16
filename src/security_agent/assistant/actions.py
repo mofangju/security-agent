@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import re
+import secrets
+import time
 from dataclasses import dataclass
 from typing import Literal
 
+from security_agent.tools.validators import sanitize_comment
+
 _IP_RE = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})")
 _CONFIRM_RE = re.compile(r"\b(yes|y|confirm|confirmed|proceed|apply|go ahead|do it)\b")
+_CONFIRM_NONCE_RE = re.compile(r"\bconfirm\s+(\d{6})\b")
+PENDING_ACTION_TTL_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -49,6 +55,53 @@ def infer_config_action(text: str) -> ConfigAction:
 def is_confirmation_message(text: str) -> bool:
     """Return True when the message is an explicit confirmation."""
     return bool(_CONFIRM_RE.search(text.lower()))
+
+
+def extract_confirmation_nonce(text: str) -> str | None:
+    """Return the explicit confirmation nonce from user text."""
+    match = _CONFIRM_NONCE_RE.search(text.lower())
+    if not match:
+        return None
+    return match.group(1)
+
+
+def build_pending_action(
+    action: ConfigAction,
+    *,
+    now_ts: int | None = None,
+    ttl_seconds: int = PENDING_ACTION_TTL_SECONDS,
+) -> dict:
+    """Build a bounded pending-action payload with nonce + expiry."""
+    now = int(now_ts if now_ts is not None else time.time())
+    return {
+        "action": action.action,
+        "mode": action.mode,
+        "ip": action.ip,
+        "comment": sanitize_comment(action.comment),
+        "nonce": f"{secrets.randbelow(1_000_000):06d}",
+        "expires_at": now + ttl_seconds,
+    }
+
+
+def is_pending_action_valid(raw: dict | None, *, now_ts: int | None = None) -> tuple[bool, str]:
+    """Validate pending action envelope."""
+    if not isinstance(raw, dict):
+        return False, "missing"
+
+    action = str(raw.get("action", ""))
+    nonce = str(raw.get("nonce", ""))
+    expires_at = raw.get("expires_at")
+    if action not in {"set_mode", "blacklist_ip"}:
+        return False, "invalid_action"
+    if not re.fullmatch(r"\d{6}", nonce):
+        return False, "invalid_nonce"
+    if not isinstance(expires_at, int):
+        return False, "invalid_expiry"
+
+    now = int(now_ts if now_ts is not None else time.time())
+    if now > expires_at:
+        return False, "expired"
+    return True, "ok"
 
 
 def action_from_pending(raw: dict | None) -> ConfigAction:

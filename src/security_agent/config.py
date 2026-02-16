@@ -95,6 +95,21 @@ class RAGConfig:
 
 
 @dataclass
+class GuardrailConfig:
+    """Guardrail and policy logging configuration."""
+
+    audit_enabled: bool = field(
+        default_factory=lambda: _env_bool("GUARDRAIL_AUDIT_ENABLED", True)
+    )
+    audit_path: str = field(
+        default_factory=lambda: os.getenv(
+            "GUARDRAIL_AUDIT_PATH",
+            str(_PROJECT_ROOT / "data" / "logs" / "guardrails.json"),
+        )
+    )
+
+
+@dataclass
 class AppConfig:
     """Top-level application configuration."""
 
@@ -102,6 +117,7 @@ class AppConfig:
     safeline: SafeLineConfig = field(default_factory=SafeLineConfig)
     petshop: PetShopConfig = field(default_factory=PetShopConfig)
     rag: RAGConfig = field(default_factory=RAGConfig)
+    guardrails: GuardrailConfig = field(default_factory=GuardrailConfig)
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
 
 

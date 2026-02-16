@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from security_agent.config import config
+from security_agent.rag.guardrails import sanitize_retrieved_text
 from security_agent.rag.retriever import HybridRetriever
 from security_agent.rag.store import VectorStore
 
@@ -35,8 +36,9 @@ def tool_rag_search(query: str, n_results: int = 5) -> str:
         # Format results for LLM consumption
         formatted = []
         for r in results:
+            safe_text = sanitize_retrieved_text(r.get("document", ""), max_chars=1500)
             formatted.append({
-                "text": r.get("document", ""),
+                "text": safe_text,
                 "source": r.get("metadata", {}).get("source", "unknown"),
                 "section": r.get("metadata", {}).get("section", ""),
                 "score": round(r.get("rrf_score", 0), 4),

@@ -10,6 +10,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from security_agent.config import config
+from security_agent.tools.validators import normalize_mode, sanitize_comment, validate_ip_or_cidr
 
 
 class SafeLineAPI:
@@ -219,15 +220,17 @@ def tool_set_protection_mode(mode: str) -> str:
     Returns:
         JSON string with result
     """
-    # Map user-friendly names to SafeLine API values
+    normalized_mode = normalize_mode(mode)
+    if normalized_mode is None:
+        return json.dumps({"error": f"Invalid mode: {mode}"})
+
+    # Map normalized names to SafeLine API values.
     mode_map = {
         "block": "block",
         "detect": "default",
-        "default": "default",
         "off": "disable",
-        "disable": "disable",
     }
-    api_mode = mode_map.get(mode.lower(), mode.lower())
+    api_mode = mode_map[normalized_mode]
 
     # All semantic detection categories in SafeLine v9.3.2
     categories = [
@@ -242,7 +245,14 @@ def tool_set_protection_mode(mode: str) -> str:
     api = SafeLineAPI()
     try:
         result = api.set_protection_mode({"semantics": semantics})
-        return json.dumps({"status": "ok", "mode": mode, "api_mode": api_mode, "result": result})
+        return json.dumps(
+            {
+                "status": "ok",
+                "mode": normalized_mode,
+                "api_mode": api_mode,
+                "result": result,
+            }
+        )
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -260,16 +270,25 @@ def tool_manage_ip_blacklist(action: str, ip: str, comment: str = "") -> str:
     """
     api = SafeLineAPI()
     try:
-        if action == "list":
+        normalized_action = (action or "").strip().lower()
+        if normalized_action == "list":
             result = api.get_ip_groups(top=50)
             return json.dumps(result, indent=2)
-        elif action == "add":
+        elif normalized_action == "add":
+            valid_ip = validate_ip_or_cidr(ip)
+            if valid_ip is None:
+                return json.dumps({"error": f"Invalid IP/CIDR: {ip}"})
+
+            safe_comment = sanitize_comment(comment or "Blocked by Security agent")
+            if not safe_comment:
+                safe_comment = "Blocked by Security agent"
+
             result = api.add_ip_group({
-                "ips": [ip],
+                "ips": [valid_ip],
                 "action": "deny",
-                "comment": comment or "Blocked by Security agent",
+                "comment": safe_comment,
             })
-            return json.dumps({"status": "ok", "ip": ip, "result": result})
+            return json.dumps({"status": "ok", "ip": valid_ip, "result": result})
         else:
             return json.dumps({"error": f"Unknown action: {action}"})
     except Exception as e:

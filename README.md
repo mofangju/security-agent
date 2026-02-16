@@ -278,7 +278,7 @@ security-agent/
 ├── data/
 │   ├── docs/                # RAG knowledge base (SafeLine, OWASP, IR)
 │   └── eval/                # Evaluation test cases
-├── scripts/                 # Helper scripts (WSL fix, evaluation runner)
+├── scripts/                 # Helper scripts (SafeLine setup, evaluation runner)
 ├── docker-compose.yml
 ├── pyproject.toml
 └── .env.example
@@ -300,6 +300,12 @@ Run deterministic offline evaluation (no live model/API calls):
 
 ```bash
 python scripts/run_eval.py --deterministic
+```
+
+Run focused guardrails regression checks:
+
+```bash
+PYTHONPATH=src pytest -q tests/assistant/test_guardrails_e2e.py
 ```
 
 ## Local Verification

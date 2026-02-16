@@ -12,7 +12,6 @@ from langchain_core.messages import HumanMessage
 
 from security_agent.assistant.graph import build_assistant_graph
 
-
 WELCOME_BANNER = """
 ╔══════════════════════════════════════════════════════════════╗
 ║              🛡️  Lumina — SafeLine AI Assistant  🛡️           ║
@@ -35,6 +34,27 @@ WELCOME_BANNER = """
 """
 
 
+MAX_HISTORY_MESSAGES = 20
+
+
+def run_turn(graph, messages: list, context: dict, user_input: str):
+    """Run a single chat turn while preserving conversation state."""
+    state = {
+        "messages": [*messages, HumanMessage(content=user_input)],
+        "next_node": "",
+        "context": context,
+    }
+    result = graph.invoke(state)
+
+    next_messages = state["messages"]
+    if result.get("messages"):
+        next_messages = [*state["messages"], result["messages"][-1]]
+    next_messages = next_messages[-MAX_HISTORY_MESSAGES:]
+
+    next_context = result.get("context", context)
+    return result, next_messages, next_context
+
+
 def run_chat():
     """Run the interactive chat loop."""
     print(WELCOME_BANNER)
@@ -48,6 +68,9 @@ def run_chat():
         print(f"❌ Failed to initialize Lumina: {e}")
         print("   Make sure LLM_PROVIDER and API keys are set in .env")
         return
+
+    conversation_messages = []
+    conversation_context = {}
 
     while True:
         try:
@@ -66,12 +89,12 @@ def run_chat():
         # Invoke the graph
         print()
         try:
-            state = {
-                "messages": [HumanMessage(content=user_input)],
-                "next_node": "",
-                "context": {},
-            }
-            result = graph.invoke(state)
+            result, conversation_messages, conversation_context = run_turn(
+                graph=graph,
+                messages=conversation_messages,
+                context=conversation_context,
+                user_input=user_input,
+            )
 
             # Extract the assistant's response
             if result["messages"]:

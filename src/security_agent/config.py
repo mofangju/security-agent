@@ -92,6 +92,12 @@ class RAGConfig:
     docs_dir: str = field(
         default_factory=lambda: str(_PROJECT_ROOT / "data" / "docs")
     )
+    selfrag_max_attempts: int = field(
+        default_factory=lambda: int(os.getenv("SELFRAG_MAX_ATTEMPTS", "3"))
+    )
+    selfrag_min_citations: int = field(
+        default_factory=lambda: int(os.getenv("SELFRAG_MIN_CITATIONS", "1"))
+    )
 
 
 @dataclass

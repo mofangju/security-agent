@@ -81,7 +81,7 @@ class HybridRetriever:
         semantic_results = self._semantic_search(query, n_results * 2, where)
 
         # BM25 keyword search
-        bm25_results = self._bm25_search(query, n_results * 2)
+        bm25_results = self._bm25_search(query, n_results * 2, where)
 
         # RRF fusion
         fused = self._rrf_fuse(semantic_results, bm25_results)
@@ -106,7 +106,7 @@ class HybridRetriever:
                 })
         return docs
 
-    def _bm25_search(self, query: str, n_results: int) -> list[dict]:
+    def _bm25_search(self, query: str, n_results: int, where: dict | None = None) -> list[dict]:
         """Perform BM25 keyword search."""
         if self._bm25_index is None:
             self._build_bm25_index()
@@ -117,10 +117,14 @@ class HybridRetriever:
         query_tokens = self._tokenize(query)
         scores = self._bm25_index.get_scores(query_tokens)
 
-        # Get top-n by score
-        scored_docs = [
-            (i, score) for i, score in enumerate(scores) if score > 0
-        ]
+        # Get top-n by score, optionally scoped by metadata filters.
+        scored_docs = []
+        for i, score in enumerate(scores):
+            if score <= 0:
+                continue
+            if where and not self._doc_matches_where(self._bm25_docs[i], where):
+                continue
+            scored_docs.append((i, score))
         scored_docs.sort(key=lambda x: x[1], reverse=True)
 
         results = []
@@ -130,6 +134,15 @@ class HybridRetriever:
             results.append(doc)
 
         return results
+
+    def _doc_matches_where(self, doc: dict, where: dict) -> bool:
+        metadata = doc.get("metadata", {})
+        if not isinstance(metadata, dict):
+            return False
+        for key, value in where.items():
+            if metadata.get(key) != value:
+                return False
+        return True
 
     def _rrf_fuse(
         self, semantic: list[dict], bm25: list[dict]

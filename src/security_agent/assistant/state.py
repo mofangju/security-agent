@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 
 class AssistantState(TypedDict):
@@ -20,3 +20,5 @@ class AssistantState(TypedDict):
     messages: Annotated[list, add_messages]
     next_node: str
     context: dict[str, Any]
+    doc_scope: NotRequired[dict[str, Any]]
+    selfrag: NotRequired[dict[str, Any]]

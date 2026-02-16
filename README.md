@@ -115,18 +115,28 @@ cp .env.example .env
 
 ### 2. Deploy SafeLine WAF
 
-SafeLine is installed via its official setup script (requires root):
+Use the automated one-command setup (works on both Linux and WSL2):
 
 ```bash
-sudo apt install -y net-tools
-sudo bash -c "$(curl -fsSLk https://waf.chaitin.com/release/latest/setup.sh)"
+bash scripts/safeline.sh up
+```
+
+This command is intentionally non-interactive and does:
+- Full SafeLine reset (removes old SafeLine containers, volumes, and `/data/safeline`)
+- Fresh install via the official SafeLine installer
+- Auto-detects platform:
+  - WSL2: patches tengine to bridge mode and uses traffic port `8888`
+  - Linux: also uses bridge mode with traffic port `8888`
+- Stack restart and readiness checks (`9443` + traffic port)
+
+Optional platform override:
+
+```bash
+bash scripts/safeline.sh up --platform wsl
+bash scripts/safeline.sh up --platform linux
 ```
 
 Access the management UI at **https://localhost:9443**.
-
-> [!NOTE]
-> **WSL2 users** — SafeLine's tengine container uses `host` network mode, which doesn't bind ports in WSL2.
-> Run `sudo bash scripts/fix_tengine_wsl.sh` after installation to switch to bridge mode (port **8888**).
 
 Reset the admin password and generate an API token:
 
@@ -140,6 +150,13 @@ sudo docker exec safeline-mgt resetadmin
    ```
    SAFELINE_API_TOKEN=<your-token>
    ```
+
+Useful commands:
+
+```bash
+bash scripts/safeline.sh status
+bash scripts/safeline.sh down
+```
 
 ### 3. Start the Target App
 

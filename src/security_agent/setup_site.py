@@ -11,14 +11,87 @@ from __future__ import annotations
 
 import json
 import sys
-import urllib3
+from typing import Sequence
 
 import requests
+import urllib3
 
 from security_agent.config import config
 
-# Suppress InsecureRequestWarning for self-signed certs
+# Suppress InsecureRequestWarning for self-signed certs in local demo mode.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def discover_petshop_container(candidates: Sequence[str] | None = None) -> str | None:
+    """Resolve a running petshop container name from Docker Compose labels."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                "label=com.docker.compose.service=petshop",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        names = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if names:
+            return names[0]
+    except Exception:
+        pass
+
+    for name in candidates or ("security-agent-petshop-1",):
+        if name:
+            return name
+    return None
+
+
+def discover_petshop_ip(container_name: str | None) -> str | None:
+    """Resolve container IP from Docker inspect."""
+    import subprocess
+
+    if not container_name:
+        return None
+
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "-f",
+                "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ip = result.stdout.strip()
+        if ip:
+            return ip
+    except Exception:
+        pass
+    return None
+
+
+def build_site_payload(petshop_ip: str, petshop_port: int, listen_port: str = "8888") -> dict:
+    """Build SafeLine site registration payload."""
+    upstream = f"http://{petshop_ip}:{petshop_port}"
+    return {
+        "ports": [listen_port],
+        "server_names": ["localhost", "petshop.local"],
+        "upstreams": [upstream],
+        "load_balance": {
+            "balance_type": 1,  # Round-robin
+        },
+        "comment": "Pet Shop — Vulnerable Demo Application",
+    }
 
 
 def setup_site() -> None:
@@ -48,44 +121,20 @@ def setup_site() -> None:
         print(f"❌ Cannot reach SafeLine at {base_url}: {e}")
         sys.exit(1)
 
-    # Detect Pet Shop container IP (tengine needs the actual container IP)
-    import subprocess
-
     petshop_ip = "127.0.0.1"
     petshop_port = config.petshop.port
-    try:
-        result = subprocess.run(
-            [
-                "docker", "inspect", "-f",
-                "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
-                "security-agent-petshop-1",
-            ],
-            capture_output=True,
-            text=True,
-        )
-        ip = result.stdout.strip()
-        if ip:
-            petshop_ip = ip
-    except Exception:
-        pass
+    container_name = discover_petshop_container()
+    discovered_ip = discover_petshop_ip(container_name)
+    if discovered_ip:
+        petshop_ip = discovered_ip
 
     upstream = f"http://{petshop_ip}:{petshop_port}"
+    site_payload = build_site_payload(petshop_ip=petshop_ip, petshop_port=petshop_port)
 
-    # Register Pet Shop as a protected site
-    site_payload = {
-        "ports": ["8888"],
-        "server_names": ["localhost", "petshop.local"],
-        "upstreams": [upstream],
-        "load_balance": {
-            "balance_type": 1,  # Round-robin
-        },
-        "comment": "Pet Shop — Vulnerable Demo Application",
-    }
-
-    print(f"\n📝 Registering Pet Shop in SafeLine...")
-    print(f"   Domains: localhost, petshop.local")
+    print("\n📝 Registering Pet Shop in SafeLine...")
+    print("   Domains: localhost, petshop.local")
     print(f"   Upstream: {upstream}")
-    print(f"   SafeLine listen port: 8888")
+    print("   SafeLine listen port: 8888")
 
     try:
         resp = requests.post(
@@ -96,9 +145,12 @@ def setup_site() -> None:
             timeout=30,
         )
         if resp.status_code == 200:
-            print(f"✅ Pet Shop registered successfully!")
-            print(f"\n   Access Pet Shop via SafeLine: http://localhost:8888")
-            print(f"   Access Pet Shop directly (no WAF): http://localhost:8080")
+            print("✅ Pet Shop registered successfully!")
+            print("\n   Access Pet Shop via SafeLine: http://localhost:8888")
+            print("   Access Pet Shop directly (no WAF): http://localhost:8080")
+        elif resp.status_code in (400, 409) and "exist" in resp.text.lower():
+            print("✅ Pet Shop appears to be already registered (idempotent success).")
+            print(f"   Existing upstream target: {upstream}")
         else:
             print(f"⚠️  Response ({resp.status_code}): {resp.text}")
             print("   Site may already be registered, or payload format may differ.")

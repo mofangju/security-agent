@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the Lumina AI assistant evaluation suite.
+"""Run the Security agent evaluation suite.
 
 Usage:
     python scripts/run_eval.py
@@ -11,7 +11,7 @@ from security_agent.eval.evaluator import Evaluator
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run Lumina evaluation suite")
+    parser = argparse.ArgumentParser(description="Run Security agent evaluation suite")
     parser.add_argument(
         "--deterministic",
         action="store_true",
@@ -19,7 +19,7 @@ def main():
     )
     args = parser.parse_args()
 
-    print("🧪 Lumina AI Assistant Evaluation")
+    print("🧪 Security agent Evaluation")
     print("=" * 50)
     print()
 

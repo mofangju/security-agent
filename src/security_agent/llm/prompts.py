@@ -1,6 +1,6 @@
-"""Prompt templates for Lumina's agent nodes.
+"""Prompt templates for Security agent nodes.
 
-Lumina is the AI-powered security assistant for SafeLine WAF, built with
+Security agent is the AI-powered security assistant for SafeLine WAF, built with
 LangGraph. Prompts are loaded from text files in the prompts/ directory
 so they can be edited without touching Python code.
 """

@@ -29,7 +29,7 @@ def infer_config_action(text: str) -> ConfigAction:
         return ConfigAction(
             action="blacklist_ip",
             ip=ip_match.group(1),
-            comment="Blocked by Lumina",
+            comment="Blocked by Security agent",
         )
 
     if any(k in norm for k in ("mode", "protection", "waf")):

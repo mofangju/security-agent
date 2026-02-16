@@ -1,4 +1,4 @@
-"""LangGraph supervisor graph for Lumina — the AI security assistant.
+"""LangGraph supervisor graph for Security agent — the AI security assistant.
 
 The supervisor routes engineer requests to specialist nodes:
 - monitor: Traffic monitoring
@@ -227,7 +227,7 @@ def config_manager_node(state: AssistantState) -> AssistantState:
             result = tool_manage_ip_blacklist(
                 "add",
                 intent.ip or "",
-                intent.comment or "Blocked by Lumina",
+                intent.comment or "Blocked by Security agent",
             )
             content = f"✅ Executed: Added {intent.ip} to blacklist\nResult: {result}"
         else:
@@ -365,9 +365,9 @@ def direct_response_node(state: AssistantState) -> AssistantState:
     messages = [
         SystemMessage(
             content=(
-                "You are Lumina, the AI Security Assistant for SafeLine WAF. "
+                "You are Security agent, the AI Security Assistant for SafeLine WAF. "
                 "Respond helpfully to the engineer's greeting or general question. "
-                "Introduce yourself as Lumina and mention that you can help with: "
+                "Introduce yourself as Security agent and mention that you can help with: "
                 "monitoring traffic, analyzing attacks, "
                 "configuring the WAF, looking up threats, tuning rules, generating reports, "
                 "and answering questions about SafeLine."

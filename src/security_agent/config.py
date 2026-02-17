@@ -131,6 +131,24 @@ class AssistantAPIConfig:
 
 
 @dataclass
+class ObservabilityConfig:
+    """Agent observability configuration."""
+
+    enabled: bool = field(
+        default_factory=lambda: _env_bool("AGENT_OBSERVABILITY_ENABLED", True)
+    )
+    metrics_namespace: str = field(
+        default_factory=lambda: os.getenv("AGENT_METRICS_NAMESPACE", "security_agent")
+    )
+    trace_jsonl_path: str = field(
+        default_factory=lambda: os.getenv(
+            "AGENT_TRACE_JSONL_PATH",
+            str(_PROJECT_ROOT / "data" / "logs" / "agent-traces.jsonl"),
+        )
+    )
+
+
+@dataclass
 class AppConfig:
     """Top-level application configuration."""
 
@@ -140,6 +158,7 @@ class AppConfig:
     rag: RAGConfig = field(default_factory=RAGConfig)
     guardrails: GuardrailConfig = field(default_factory=GuardrailConfig)
     assistant_api: AssistantAPIConfig = field(default_factory=AssistantAPIConfig)
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
 
 

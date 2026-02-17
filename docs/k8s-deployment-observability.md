@@ -70,6 +70,7 @@ Apply collector:
 ```bash
 kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f k8s/observability/otel-collector.yaml
+kubectl apply -f k8s/observability/prometheus-rules-agent.yaml
 ```
 
 Enable ServiceMonitor in Helm values if you use Prometheus Operator:
@@ -90,3 +91,10 @@ observability:
    - readiness/liveness failures
    - `security_agent_chat_failures_total` increase
    - sustained `selfrag` escalations.
+6. Track multi-agent metrics:
+   - `security_agent_agent_handoff_total`
+   - `security_agent_agent_tool_calls_total`
+   - `security_agent_agent_guardrail_total`
+   - `security_agent_agent_selfrag_decision_total`
+
+Runbook: `docs/agent-observability-runbook.md`

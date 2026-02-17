@@ -57,3 +57,14 @@ def test_chat_endpoint_rejects_empty_message():
     resp = client.post("/v1/chat", json={"message": "   "})
     assert resp.status_code == 400
     assert resp.get_json()["error"] == "message_required"
+
+
+def test_metrics_endpoint_includes_agent_metrics():
+    app = create_app(graph_factory=lambda: _GraphStub(), turn_runner=_turn_runner)
+    client = app.test_client()
+
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    text = resp.data.decode("utf-8")
+    assert "security_agent_chat_requests_total" in text
+    assert "security_agent_agent_route_total" in text

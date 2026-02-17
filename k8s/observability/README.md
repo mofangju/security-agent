@@ -13,6 +13,7 @@ This folder contains a baseline OpenTelemetry Collector deployment for `security
 ```bash
 kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f k8s/observability/otel-collector.yaml
+kubectl apply -f k8s/observability/prometheus-rules-agent.yaml
 ```
 
 For Kind demo context:
@@ -43,3 +44,10 @@ env:
    - `security_agent_chat_failures_total`
    - readiness failures
    - Self-RAG escalation rate.
+5. Multi-agent operational metrics:
+   - `security_agent_agent_route_total`
+   - `security_agent_agent_handoff_total`
+   - `security_agent_agent_tool_calls_total`
+   - `security_agent_agent_guardrail_total`
+
+See `docs/agent-observability-runbook.md` for production queries and triage workflow.

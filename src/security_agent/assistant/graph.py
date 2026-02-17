@@ -37,6 +37,7 @@ from security_agent.assistant.selfrag import (
     validate_answer_citations,
 )
 from security_agent.assistant.state import AssistantState
+from security_agent.assistant.telemetry import get_agent_telemetry, monotonic_now
 from security_agent.config import config
 from security_agent.llm.prompts import (
     CONFIG_MANAGER_SYSTEM,
@@ -67,6 +68,46 @@ SPECIALIST_NODES = [
     "threat_intel", "tuner", "reporter", "rag_agent",
 ]
 AUDIT_LOGGER = get_guardrail_audit_logger()
+TELEMETRY = get_agent_telemetry()
+
+
+def _context_ids(context: dict | None) -> tuple[str, str, str]:
+    ctx = context or {}
+    session_id = str(ctx.get("session_id", ""))
+    turn_id = str(ctx.get("turn_id", ""))
+    trace_id = str(ctx.get("trace_id", ""))
+    return session_id, turn_id, trace_id
+
+
+def _audit(
+    *,
+    gate: str,
+    decision: str,
+    reason: str,
+    metadata: dict | None = None,
+    context: dict | None = None,
+) -> None:
+    AUDIT_LOGGER.log(
+        gate=gate,
+        decision=decision,
+        reason=reason,
+        metadata=metadata or {},
+    )
+    TELEMETRY.observe_guardrail(gate, decision, reason)
+
+    session_id, turn_id, trace_id = _context_ids(context)
+    TELEMETRY.emit_event(
+        "guardrail.decision",
+        trace_id=trace_id,
+        session_id=session_id,
+        turn_id=turn_id,
+        metadata={
+            "gate": gate,
+            "decision": decision,
+            "reason": reason,
+            "metadata": metadata or {},
+        },
+    )
 
 
 def supervisor_node(state: AssistantState) -> AssistantState:
@@ -92,19 +133,32 @@ def supervisor_node(state: AssistantState) -> AssistantState:
     normalized_route = raw_route.strip().lower()
     route = parse_supervisor_route(raw_route)
     if normalized_route in ALLOWED_ROUTES:
-        AUDIT_LOGGER.log(
+        _audit(
             gate="route_parse",
             decision="allow",
             reason="allowed_token",
             metadata={"raw": raw_route, "selected": route},
+            context=state.get("context", {}),
         )
     else:
-        AUDIT_LOGGER.log(
+        _audit(
             gate="route_parse",
             decision="deny",
             reason="invalid_token",
             metadata={"raw": raw_route, "fallback": route},
+            context=state.get("context", {}),
         )
+
+    context = dict(state.get("context", {}))
+    session_id, turn_id, trace_id = _context_ids(context)
+    TELEMETRY.inc_route(route)
+    TELEMETRY.emit_event(
+        "route.selected",
+        trace_id=trace_id,
+        session_id=session_id,
+        turn_id=turn_id,
+        metadata={"selected_agent": route, "raw_route": raw_route},
+    )
     return {**state, "next_node": route}
 
 
@@ -215,11 +269,12 @@ def config_manager_node(state: AssistantState) -> AssistantState:
     if pending_intent.action != "none" and "cancel" in last_user_message.lower():
         context.pop("pending_action", None)
         context["confirmed"] = False
-        AUDIT_LOGGER.log(
+        _audit(
             gate="action_confirmation",
             decision="deny",
             reason="user_cancelled",
             metadata={"action": pending_intent.action},
+            context=context,
         )
         return {
             **state,
@@ -232,11 +287,12 @@ def config_manager_node(state: AssistantState) -> AssistantState:
         if not pending_ok:
             context.pop("pending_action", None)
             context["confirmed"] = False
-            AUDIT_LOGGER.log(
+            _audit(
                 gate="action_confirmation",
                 decision="deny",
                 reason=pending_reason,
                 metadata={"action": pending_intent.action},
+                context=context,
             )
             if pending_reason == "expired":
                 return {
@@ -267,11 +323,12 @@ def config_manager_node(state: AssistantState) -> AssistantState:
         expected_nonce = str((pending_raw or {}).get("nonce", ""))
         if confirm_nonce is not None:
             if confirm_nonce != expected_nonce:
-                AUDIT_LOGGER.log(
+                _audit(
                     gate="action_confirmation",
                     decision="deny",
                     reason="nonce_mismatch",
                     metadata={"action": pending_intent.action},
+                    context=context,
                 )
                 return {
                     **state,
@@ -287,11 +344,12 @@ def config_manager_node(state: AssistantState) -> AssistantState:
                 }
             intent = pending_intent
             context["confirmed"] = True
-            AUDIT_LOGGER.log(
+            _audit(
                 gate="action_confirmation",
                 decision="allow",
                 reason="nonce_match",
                 metadata={"action": pending_intent.action},
+                context=context,
             )
         elif intent.action == "none":
             return {
@@ -328,11 +386,12 @@ def config_manager_node(state: AssistantState) -> AssistantState:
             if intent.action == "blacklist_ip":
                 valid_ip = validate_ip_or_cidr(intent.ip)
                 if valid_ip is None:
-                    AUDIT_LOGGER.log(
+                    _audit(
                         gate="pre_tool_validation",
                         decision="deny",
                         reason="invalid_ip",
                         metadata={"action": intent.action, "ip": intent.ip},
+                        context=context,
                     )
                     return {
                         **state,
@@ -342,11 +401,12 @@ def config_manager_node(state: AssistantState) -> AssistantState:
                         ],
                     }
             if intent.action == "set_mode" and normalize_mode(intent.mode) is None:
-                AUDIT_LOGGER.log(
+                _audit(
                     gate="pre_tool_validation",
                     decision="deny",
                     reason="invalid_mode",
                     metadata={"action": intent.action, "mode": intent.mode},
+                    context=context,
                 )
                 return {
                     **state,
@@ -359,11 +419,12 @@ def config_manager_node(state: AssistantState) -> AssistantState:
             context["pending_action"] = build_pending_action(intent)
             context["confirmed"] = False
             nonce = context["pending_action"]["nonce"]
-            AUDIT_LOGGER.log(
+            _audit(
                 gate="action_confirmation",
                 decision="challenge",
                 reason="confirmation_required",
                 metadata={"action": intent.action},
+                context=context,
             )
             return {
                 **state,
@@ -383,27 +444,51 @@ def config_manager_node(state: AssistantState) -> AssistantState:
         if intent.action == "set_mode":
             normalized_mode = normalize_mode(intent.mode)
             if normalized_mode is None:
-                AUDIT_LOGGER.log(
+                _audit(
                     gate="pre_tool_validation",
                     decision="deny",
                     reason="invalid_mode",
                     metadata={"action": intent.action, "mode": intent.mode},
+                    context=context,
                 )
                 content = "❌ Change failed: invalid protection mode."
             else:
-                AUDIT_LOGGER.log(
+                _audit(
                     gate="pre_tool_validation",
                     decision="allow",
                     reason="mode_valid",
                     metadata={"action": intent.action, "mode": normalized_mode},
+                    context=context,
                 )
+                started = monotonic_now()
                 result = tool_set_protection_mode(normalized_mode)
                 ok, reason = parse_tool_result(result)
-                AUDIT_LOGGER.log(
+                duration = monotonic_now() - started
+                TELEMETRY.observe_tool_call(
+                    "config_manager",
+                    "tool_set_protection_mode",
+                    "ok" if ok else "error",
+                    duration,
+                )
+                session_id, turn_id, trace_id = _context_ids(context)
+                TELEMETRY.emit_event(
+                    "tool.call",
+                    trace_id=trace_id,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    metadata={
+                        "agent": "config_manager",
+                        "tool": "tool_set_protection_mode",
+                        "status": "ok" if ok else "error",
+                        "duration_seconds": duration,
+                    },
+                )
+                _audit(
                     gate="post_tool_result",
                     decision="allow" if ok else "deny",
                     reason="tool_ok" if ok else reason,
                     metadata={"action": intent.action},
+                    context=context,
                 )
                 if ok:
                     content = (
@@ -415,31 +500,55 @@ def config_manager_node(state: AssistantState) -> AssistantState:
         elif intent.action == "blacklist_ip":
             valid_ip = validate_ip_or_cidr(intent.ip)
             if valid_ip is None:
-                AUDIT_LOGGER.log(
+                _audit(
                     gate="pre_tool_validation",
                     decision="deny",
                     reason="invalid_ip",
                     metadata={"action": intent.action, "ip": intent.ip},
+                    context=context,
                 )
                 content = "❌ Change failed: invalid IP or CIDR value."
             else:
-                AUDIT_LOGGER.log(
+                _audit(
                     gate="pre_tool_validation",
                     decision="allow",
                     reason="ip_valid",
                     metadata={"action": intent.action, "ip": valid_ip},
+                    context=context,
                 )
+                started = monotonic_now()
                 result = tool_manage_ip_blacklist(
                     "add",
                     valid_ip,
                     intent.comment or "Blocked by Security agent",
                 )
                 ok, reason = parse_tool_result(result)
-                AUDIT_LOGGER.log(
+                duration = monotonic_now() - started
+                TELEMETRY.observe_tool_call(
+                    "config_manager",
+                    "tool_manage_ip_blacklist",
+                    "ok" if ok else "error",
+                    duration,
+                )
+                session_id, turn_id, trace_id = _context_ids(context)
+                TELEMETRY.emit_event(
+                    "tool.call",
+                    trace_id=trace_id,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    metadata={
+                        "agent": "config_manager",
+                        "tool": "tool_manage_ip_blacklist",
+                        "status": "ok" if ok else "error",
+                        "duration_seconds": duration,
+                    },
+                )
+                _audit(
                     gate="post_tool_result",
                     decision="allow" if ok else "deny",
                     reason="tool_ok" if ok else reason,
                     metadata={"action": intent.action, "ip": valid_ip},
+                    context=context,
                 )
                 if ok:
                     content = f"✅ Executed: Added {valid_ip} to blacklist\nResult: {result}"
@@ -568,12 +677,14 @@ def rag_agent_node(state: AssistantState) -> AssistantState:
         evidence, parse_reason = parse_evidence_payload(rag_raw)
 
         if not evidence:
-            AUDIT_LOGGER.log(
+            _audit(
                 gate="selfrag_retrieval",
                 decision="deny",
                 reason=parse_reason or "no_evidence",
                 metadata={"attempt": attempt, "where": where or {}},
+                context=context,
             )
+            TELEMETRY.observe_selfrag_decision("ESCALATE", parse_reason or "no_evidence")
             trace.append(
                 {
                     "attempt": attempt,
@@ -634,11 +745,27 @@ def rag_agent_node(state: AssistantState) -> AssistantState:
             decision = "RETRY"
             reason = f"citation_guardrail:{cite_reason}"
 
-        AUDIT_LOGGER.log(
+        TELEMETRY.observe_selfrag_decision(decision, reason or "none")
+        session_id, turn_id, trace_id = _context_ids(context)
+        TELEMETRY.emit_event(
+            "selfrag.decision",
+            trace_id=trace_id,
+            session_id=session_id,
+            turn_id=turn_id,
+            metadata={
+                "attempt": attempt,
+                "decision": decision,
+                "reason": reason,
+                "citations_ok": cites_ok,
+                "where": where or {},
+            },
+        )
+        _audit(
             gate="selfrag_decision",
             decision=decision.lower(),
             reason=reason or "none",
             metadata={"attempt": attempt, "citations_ok": cites_ok, "where": where or {}},
+            context=context,
         )
         trace.append(
             {
@@ -726,7 +853,17 @@ def route_to_specialist(state: AssistantState) -> str:
     """Routing function — determines next node based on supervisor decision."""
     next_node = state.get("next_node", "direct")
     if next_node in SPECIALIST_NODES:
+        TELEMETRY.inc_handoff("supervisor", next_node)
+        session_id, turn_id, trace_id = _context_ids(dict(state.get("context", {})))
+        TELEMETRY.emit_event(
+            "route.handoff",
+            trace_id=trace_id,
+            session_id=session_id,
+            turn_id=turn_id,
+            metadata={"from_agent": "supervisor", "to_agent": next_node},
+        )
         return next_node
+    TELEMETRY.inc_handoff("supervisor", "direct")
     return "direct"
 
 

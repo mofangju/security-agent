@@ -29,4 +29,24 @@ def test_run_turn_preserves_prior_messages():
     assert "first" in second_call_contents
     assert "follow-up" in second_call_contents
     assert len(messages) == 4
-    assert context == {}
+    assert context["session_id"]
+    assert context["turn_id"] == "2"
+    assert context["trace_id"]
+
+
+def test_run_turn_stamps_trace_and_turn_ids():
+    graph = _GraphStub()
+    messages = []
+    context = {}
+
+    _, messages, context = run_turn(graph, messages, context, "first")
+    first_trace = context.get("trace_id")
+    assert context.get("session_id")
+    assert context.get("turn_id") == "1"
+    assert first_trace
+
+    _, messages, context = run_turn(graph, messages, context, "second")
+    assert context.get("session_id")
+    assert context.get("turn_id") == "2"
+    assert context.get("trace_id")
+    assert context.get("trace_id") != first_trace

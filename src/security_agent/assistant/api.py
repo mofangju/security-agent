@@ -12,6 +12,7 @@ from flask import Flask, Response, jsonify, request
 
 from security_agent.assistant.cli import run_turn
 from security_agent.assistant.graph import build_assistant_graph
+from security_agent.assistant.telemetry import get_agent_telemetry
 from security_agent.config import config
 
 
@@ -87,6 +88,7 @@ def create_app(
     lock = threading.Lock()
     sessions: dict[str, SessionState] = {}
     metrics = Metrics()
+    agent_telemetry = get_agent_telemetry()
     graph: Any | None = None
 
     def _get_graph() -> Any:
@@ -128,7 +130,7 @@ def create_app(
 
     @app.get("/metrics")
     def metrics_endpoint() -> Response:
-        payload = metrics.render_prometheus()
+        payload = metrics.render_prometheus() + agent_telemetry.render_prometheus()
         return Response(payload, mimetype="text/plain; version=0.0.4")
 
     @app.post("/v1/chat")
@@ -160,11 +162,14 @@ def create_app(
                 SessionState(messages=[], context={}, updated_at=now),
             )
 
+        req_context = dict(session.context)
+        req_context.setdefault("session_id", session_id)
+
         try:
             result, messages, context = turn_runner(
                 graph=_get_graph(),
                 messages=session.messages,
-                context=session.context,
+                context=req_context,
                 user_input=message,
             )
             reply = ""
@@ -190,7 +195,9 @@ def create_app(
         except Exception as exc:  # pragma: no cover - defensive
             return jsonify({"error": "chat_failed", "detail": str(exc)}), 500
         finally:
-            metrics.observe_chat(time.perf_counter() - started, ok=ok)
+            duration = time.perf_counter() - started
+            metrics.observe_chat(duration, ok=ok)
+            agent_telemetry.observe_turn(duration)
 
     return app
 

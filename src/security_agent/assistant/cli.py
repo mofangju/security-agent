@@ -8,6 +8,8 @@ rule tuning, incident reporting, and documentation Q&A.
 
 from __future__ import annotations
 
+import uuid
+
 from langchain_core.messages import HumanMessage
 
 from security_agent.assistant.graph import build_assistant_graph
@@ -39,10 +41,21 @@ MAX_HISTORY_MESSAGES = 20
 
 def run_turn(graph, messages: list, context: dict, user_input: str):
     """Run a single chat turn while preserving conversation state."""
+    next_context = dict(context)
+    if not str(next_context.get("session_id", "")).strip():
+        next_context["session_id"] = uuid.uuid4().hex
+
+    try:
+        current_turn = int(str(next_context.get("turn_id", "0")))
+    except ValueError:
+        current_turn = 0
+    next_context["turn_id"] = str(max(0, current_turn) + 1)
+    next_context["trace_id"] = uuid.uuid4().hex
+
     state = {
         "messages": [*messages, HumanMessage(content=user_input)],
         "next_node": "",
-        "context": context,
+        "context": next_context,
     }
     result = graph.invoke(state)
 
@@ -51,8 +64,11 @@ def run_turn(graph, messages: list, context: dict, user_input: str):
         next_messages = [*state["messages"], result["messages"][-1]]
     next_messages = next_messages[-MAX_HISTORY_MESSAGES:]
 
-    next_context = result.get("context", context)
-    return result, next_messages, next_context
+    out_context = dict(result.get("context", next_context))
+    out_context.setdefault("session_id", next_context["session_id"])
+    out_context.setdefault("turn_id", next_context["turn_id"])
+    out_context.setdefault("trace_id", next_context["trace_id"])
+    return result, next_messages, out_context
 
 
 def run_chat():

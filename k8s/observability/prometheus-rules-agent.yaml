@@ -1,0 +1,58 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: security-agent-observability-rules
+  namespace: observability
+spec:
+  groups:
+    - name: security-agent-multi-agent-observability
+      rules:
+        - alert: SecurityAgentToolFailureHigh
+          expr: |
+            (
+              sum(rate(security_agent_agent_tool_calls_total{status="error"}[5m]))
+              /
+              clamp_min(sum(rate(security_agent_agent_tool_calls_total[5m])), 1)
+            ) > 0.10
+          for: 10m
+          labels:
+            severity: warning
+            service: security-agent
+          annotations:
+            summary: Security Agent tool-call failures are elevated
+            description: Tool error ratio has exceeded 10% for 10 minutes.
+
+        - alert: SecurityAgentSelfRagEscalationHigh
+          expr: |
+            sum(rate(security_agent_agent_selfrag_decision_total{decision="ESCALATE"}[10m])) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+            service: security-agent
+          annotations:
+            summary: Security Agent Self-RAG escalations are elevated
+            description: Grounding escalations are sustained, indicating retrieval/grounding drift.
+
+        - alert: SecurityAgentGuardrailDenySpike
+          expr: |
+            sum(rate(security_agent_agent_guardrail_total{decision="deny"}[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+            service: security-agent
+          annotations:
+            summary: Security Agent guardrail denies are spiking
+            description: Guardrail deny decisions rose above normal baseline.
+
+        - alert: SecurityAgentReadinessAndChatFailure
+          expr: |
+            increase(security_agent_chat_failures_total[10m]) > 10
+            and
+            increase(security_agent_readiness_checks_total[10m]) > 0
+          for: 10m
+          labels:
+            severity: critical
+            service: security-agent
+          annotations:
+            summary: Security Agent has sustained chat failures
+            description: Chat failures are elevated while readiness checks continue, investigate backend/tool/provider issues.

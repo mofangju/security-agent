@@ -23,6 +23,7 @@ env/
 # Data (generated)
 data/chroma/
 data/logs/*.json
+data/logs/*.jsonl
 *.db
 
 # OS

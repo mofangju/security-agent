@@ -1,0 +1,122 @@
+replicaCount: 2
+
+image:
+  repository: security-agent
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 10001
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8081
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: security-agent.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  storageClassName: ""
+  existingClaim: ""
+  mountPath: /app/data/chroma
+
+networkPolicy:
+  enabled: true
+  allowIngressNamespaces: []
+  allowEgressCIDRs: []
+
+observability:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+env:
+  LLM_PROVIDER: openai
+  OPENAI_MODEL: gpt-4o-mini
+  GOOGLE_MODEL: gemini-2.0-flash
+  VLLM_BASE_URL: http://vllm.default.svc.cluster.local:8000/v1
+  VLLM_MODEL: meta-llama/Llama-3.1-8B-Instruct
+  SAFELINE_URL: https://safeline-mgt.default.svc.cluster.local:9443
+  SAFELINE_VERIFY_TLS: "true"
+  SAFELINE_TIMEOUT: "10"
+  SAFELINE_RETRIES: "2"
+  CHROMA_PERSIST_DIR: /app/data/chroma
+  EMBEDDING_MODEL: all-MiniLM-L6-v2
+  SELFRAG_MAX_ATTEMPTS: "3"
+  SELFRAG_MIN_CITATIONS: "1"
+  GUARDRAIL_AUDIT_ENABLED: "true"
+  GUARDRAIL_AUDIT_PATH: /tmp/guardrails.json
+  ASSISTANT_API_HOST: 0.0.0.0
+  ASSISTANT_API_PORT: "8081"
+  ASSISTANT_API_DEBUG: "false"
+  ASSISTANT_API_SESSION_TTL_SECONDS: "3600"
+  ASSISTANT_API_MAX_SESSIONS: "1000"
+  LOG_LEVEL: INFO
+  OTEL_SERVICE_NAME: security-agent
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+
+secretEnv:
+  # Secret name containing key-value pairs for these envs.
+  # Recommended keys:
+  # OPENAI_API_KEY
+  # GOOGLE_API_KEY
+  # SAFELINE_API_TOKEN
+  name: security-agent-secrets

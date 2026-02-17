@@ -188,6 +188,20 @@ You can now chat with the agent:
 - *"Switch to blocking mode"*
 - *"How do I set up rate limiting?"*
 
+Run as HTTP service (for Kubernetes deployment):
+
+```bash
+python -m security_agent.assistant.api
+```
+
+Health/ready/metrics endpoints:
+- `GET /healthz`
+- `GET /readyz`
+- `GET /metrics`
+
+Chat endpoint:
+- `POST /v1/chat` with JSON body `{"message":"...","session_id":"optional"}`
+
 ---
 
 ## Demo Walkthrough
@@ -326,6 +340,20 @@ ruff check \
   tests
 PYTHONPATH=src pytest -q
 ```
+
+## Kubernetes Deployment
+
+Kubernetes + observability guide:
+- `docs/k8s-deployment-observability.md`
+- `docs/kind-demo-walkthrough.md`
+- `charts/security-agent/`
+- `k8s/observability/`
+
+Kind local demo scripts:
+- `scripts/demo_dependencies_up.sh`
+- `scripts/kind_demo_up.sh`
+- `scripts/kind_demo_deploy.sh`
+- `scripts/kind_demo_status.sh`
 
 ---
 

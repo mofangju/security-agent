@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+.pytest_cache
+.ruff_cache
+.worktrees
+__pycache__
+*.pyc
+data/chroma
+data/logs
+docs/plans
+tests

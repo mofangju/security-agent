@@ -1,0 +1,13 @@
+{{- if .Values.pdb.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "security-agent.fullname" . }}
+  labels:
+    {{- include "security-agent.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "security-agent.selectorLabels" . | nindent 6 }}
+{{- end }}

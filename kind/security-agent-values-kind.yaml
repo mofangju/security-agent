@@ -1,0 +1,23 @@
+# Kind-local demo profile for Security Agent.
+# SafeLine remains outside Kubernetes (Docker on host).
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+pdb:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+persistence:
+  enabled: false
+
+env:
+  # Preferred endpoint for Docker Desktop / WSL.
+  # If this does not resolve in your environment, override at deploy time:
+  # --set env.SAFELINE_URL=https://172.17.0.1:9443
+  SAFELINE_URL: https://host.docker.internal:9443
+  SAFELINE_VERIFY_TLS: "false"
+  GUARDRAIL_AUDIT_PATH: /tmp/guardrails.json

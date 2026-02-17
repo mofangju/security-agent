@@ -1,0 +1,19 @@
+1. Get service endpoint:
+{{- if eq .Values.service.type "NodePort" }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "security-agent.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  kubectl get svc -n {{ .Release.Namespace }} {{ include "security-agent.fullname" . }} -w
+{{- else }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "security-agent.fullname" . }} 8081:{{ .Values.service.port }}
+{{- end }}
+
+2. Health checks:
+  curl -s http://localhost:8081/healthz
+  curl -s http://localhost:8081/readyz
+
+3. Chat API:
+  curl -s http://localhost:8081/v1/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message":"show recent attacks"}'

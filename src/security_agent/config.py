@@ -116,6 +116,21 @@ class GuardrailConfig:
 
 
 @dataclass
+class AssistantAPIConfig:
+    """HTTP API runtime configuration for Kubernetes deployment."""
+
+    host: str = field(default_factory=lambda: os.getenv("ASSISTANT_API_HOST", "0.0.0.0"))
+    port: int = field(default_factory=lambda: int(os.getenv("ASSISTANT_API_PORT", "8081")))
+    debug: bool = field(default_factory=lambda: _env_bool("ASSISTANT_API_DEBUG", False))
+    session_ttl_seconds: int = field(
+        default_factory=lambda: int(os.getenv("ASSISTANT_API_SESSION_TTL_SECONDS", "3600"))
+    )
+    max_sessions: int = field(
+        default_factory=lambda: int(os.getenv("ASSISTANT_API_MAX_SESSIONS", "1000"))
+    )
+
+
+@dataclass
 class AppConfig:
     """Top-level application configuration."""
 
@@ -124,6 +139,7 @@ class AppConfig:
     petshop: PetShopConfig = field(default_factory=PetShopConfig)
     rag: RAGConfig = field(default_factory=RAGConfig)
     guardrails: GuardrailConfig = field(default_factory=GuardrailConfig)
+    assistant_api: AssistantAPIConfig = field(default_factory=AssistantAPIConfig)
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
 
 

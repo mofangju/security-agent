@@ -37,7 +37,13 @@ class _TelemetrySpy:
     def inc_handoff(self, from_agent: str, to_agent: str) -> None:
         self.handoff_calls.append((from_agent, to_agent))
 
-    def observe_tool_call(self, agent: str, tool: str, status: str, duration_seconds: float) -> None:
+    def observe_tool_call(
+        self,
+        agent: str,
+        tool: str,
+        status: str,
+        duration_seconds: float,
+    ) -> None:
         self.tool_calls.append((agent, tool, status, duration_seconds))
 
     def observe_guardrail(self, gate: str, decision: str, reason: str) -> None:
